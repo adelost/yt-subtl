@@ -1,0 +1,30 @@
+{
+  "name": "YouTube Transcript (Inline Panel)",
+  "description": "Adds an inline panel on YouTube watch pages to fetch and show full subtitles/transcript.",
+  "version": "1.0.0",
+  "manifest_version": 3,
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://*.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "http://www.youtube.com/*"
+      ],
+      "js": ["content-script.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [{
+    "resources": ["inpage.js"],
+    "matches": ["https://www.youtube.com/*", "http://www.youtube.com/*"]
+  }],
+  "icons": {}
+}

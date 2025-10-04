@@ -1,0 +1,124 @@
+:root {
+  --ytxt-bg: #0f0f0f;
+  --ytxt-fg: #f1f1f1;
+  --ytxt-muted: #aaaaaa;
+  --ytxt-accent: #3ea6ff;
+  --ytxt-border: #303030;
+  --ytxt-ok: #38b000;
+  --ytxt-warn: #f5a623;
+  --ytxt-error: #ff4d4f;
+  --ytxt-shadow: rgba(0,0,0,0.35);
+}
+
+/* Light theme friendliness */
+@media (prefers-color-scheme: light) {
+  :root {
+    --ytxt-bg: #ffffff;
+    --ytxt-fg: #111111;
+    --ytxt-muted: #555555;
+    --ytxt-accent: #065fd4;
+    --ytxt-border: #e5e5e5;
+    --ytxt-shadow: rgba(0,0,0,0.15);
+  }
+}
+
+.ytxt-panel {
+  font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: var(--ytxt-fg);
+  background: var(--ytxt-bg);
+  border: 1px solid var(--ytxt-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px var(--ytxt-shadow);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.ytxt-floating {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: min(520px, 42vw);
+  z-index: 10000;
+}
+
+.ytxt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ytxt-title {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.ytxt-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ytxt-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--ytxt-muted);
+}
+
+.ytxt-btn, .ytxt-cta {
+  cursor: pointer;
+  border: 1px solid var(--ytxt-border);
+  background: transparent;
+  color: var(--ytxt-fg);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-weight: 600;
+}
+.ytxt-btn:hover, .ytxt-cta:hover { border-color: var(--ytxt-accent); }
+
+.ytxt-cta {
+  background: var(--ytxt-accent);
+  color: white;
+  border-color: var(--ytxt-accent);
+}
+
+.ytxt-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ytxt-select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--ytxt-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ytxt-fg);
+}
+
+.ytxt-output {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 220px;
+  border: 1px solid var(--ytxt-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--ytxt-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: pre-wrap;
+}
+
+.ytxt-footnote {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ytxt-muted);
+}
+.ytxt-ok { color: var(--ytxt-ok); }
+.ytxt-warn { color: var(--ytxt-warn); }
+.ytxt-error { color: var(--ytxt-error); }
