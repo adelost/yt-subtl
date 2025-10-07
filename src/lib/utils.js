@@ -9,40 +9,28 @@ export const msToTimestamp = (ms) => {
          String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
 };
 
-export const fetchCaption = (url) => new Promise((resolve, reject) => {
-  // Generate unique request ID
-  const requestId = `ytxt-${Date.now()}-${Math.random()}`;
-  console.log('[ytxt-main] fetchCaption called:', requestId, url);
+export const fetchCaption = async (url) => {
+  // Fetch directly from MAIN world - we have access to YouTube's cookies here
+  console.log('[ytxt] Fetching caption:', url.substring(0, 100));
 
-  // Listen for response from bridge
-  const listener = (event) => {
-    if (event.origin !== location.origin) return;
-    const msg = event.data;
-    if (msg?.source !== 'ytxt-bridge' || msg?.requestId !== requestId) return;
+  try {
+    const res = await fetch(url, { credentials: 'include' });
+    const contentType = res.headers.get('content-type') || '';
+    const body = await res.text();
 
-    console.log('[ytxt-main] Received response from bridge:', msg);
-    window.removeEventListener('message', listener);
+    console.log('[ytxt] Response:', {
+      status: res.status,
+      contentType,
+      bodyLength: body.length
+    });
 
-    if (msg.error) return reject(new Error(msg.error));
-    if (!msg.response?.ok) return reject(new Error(msg.response?.error || 'Fetch failed'));
-    resolve(msg.response);
-  };
+    if (!res.ok) {
+      return { ok: false, error: `HTTP ${res.status}` };
+    }
 
-  window.addEventListener('message', listener);
-
-  // Post message to bridge (ISOLATED world)
-  console.log('[ytxt-main] Posting message to bridge');
-  window.postMessage({
-    source: 'ytxt-main',
-    type: 'FETCH_CAPTION',
-    url,
-    requestId
-  }, '*');
-
-  // Timeout after 10 seconds
-  setTimeout(() => {
-    console.log('[ytxt-main] Request timeout:', requestId);
-    window.removeEventListener('message', listener);
-    reject(new Error('Request timeout'));
-  }, 10000);
-});
+    return { ok: true, status: res.status, contentType, body };
+  } catch (err) {
+    console.error('[ytxt] Fetch error:', err);
+    return { ok: false, error: err.message || String(err) };
+  }
+};
