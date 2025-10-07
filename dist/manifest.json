@@ -18,6 +18,16 @@
         "http://www.youtube.com/*"
       ],
       "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "http://www.youtube.com/*"
+      ],
+      "js": [
         "content-script.js"
       ],
       "css": [

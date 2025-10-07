@@ -10,10 +10,35 @@ export const msToTimestamp = (ms) => {
 };
 
 export const fetchCaption = (url) => new Promise((resolve, reject) => {
-  // When running in world: "MAIN", chrome.runtime.sendMessage requires extension ID as first param
-  chrome.runtime.sendMessage(chrome.runtime.id, { type: 'FETCH_CAPTION', url }, (resp) => {
-    if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-    if (!resp?.ok) return reject(new Error(resp?.error || 'Fetch failed'));
-    resolve(resp);
-  });
+  // Generate unique request ID
+  const requestId = `ytxt-${Date.now()}-${Math.random()}`;
+
+  // Listen for response from bridge
+  const listener = (event) => {
+    if (event.origin !== location.origin) return;
+    const msg = event.data;
+    if (msg?.source !== 'ytxt-bridge' || msg?.requestId !== requestId) return;
+
+    window.removeEventListener('message', listener);
+
+    if (msg.error) return reject(new Error(msg.error));
+    if (!msg.response?.ok) return reject(new Error(msg.response?.error || 'Fetch failed'));
+    resolve(msg.response);
+  };
+
+  window.addEventListener('message', listener);
+
+  // Post message to bridge (ISOLATED world)
+  window.postMessage({
+    source: 'ytxt-main',
+    type: 'FETCH_CAPTION',
+    url,
+    requestId
+  }, '*');
+
+  // Timeout after 10 seconds
+  setTimeout(() => {
+    window.removeEventListener('message', listener);
+    reject(new Error('Request timeout'));
+  }, 10000);
 });
