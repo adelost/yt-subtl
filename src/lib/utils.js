@@ -20,7 +20,7 @@ export const fetchCaption = async (url) => {
       return {
         ok: false,
         error: `HTTP ${res.status}`,
-        details: `Status: ${res.status}, Content-Type: ${contentType}, Body length: ${body.length}`
+        details: `Status: ${res.status}, Content-Type: ${contentType}, Body: ${body.substring(0, 500)}`
       };
     }
 
@@ -28,7 +28,16 @@ export const fetchCaption = async (url) => {
       return {
         ok: false,
         error: 'Empty response',
-        details: `Status: ${res.status}, Content-Type: ${contentType}, Body is empty`
+        details: `Status: ${res.status}, Content-Type: ${contentType}, Body is empty. URL: ${url.substring(0, 100)}`
+      };
+    }
+
+    // Check if we got HTML when we expected JSON/VTT
+    if (contentType.includes('text/html')) {
+      return {
+        ok: false,
+        error: 'Got HTML instead of captions',
+        details: `Received HTML page instead of caption data. Body preview: ${body.substring(0, 500)}`
       };
     }
 
