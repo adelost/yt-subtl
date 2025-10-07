@@ -10,7 +10,8 @@ export const msToTimestamp = (ms) => {
 };
 
 export const fetchCaption = (url) => new Promise((resolve, reject) => {
-  chrome.runtime.sendMessage({ type: 'FETCH_CAPTION', url }, (resp) => {
+  // When running in world: "MAIN", chrome.runtime.sendMessage requires extension ID as first param
+  chrome.runtime.sendMessage(chrome.runtime.id, { type: 'FETCH_CAPTION', url }, (resp) => {
     if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
     if (!resp?.ok) return reject(new Error(resp?.error || 'Fetch failed'));
     resolve(resp);
