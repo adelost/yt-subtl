@@ -79,6 +79,12 @@ export const createPanel = () => {
       <div class="ytxt-footer">
         <div class="ytxt-footnote" id="ytxt-status"></div>
         <div class="ytxt-stats" id="ytxt-stats"></div>
+        <div class="ytxt-debug">
+          <details id="ytxt-debug-details">
+            <summary title="Show debug info">Debug</summary>
+            <pre id="ytxt-debug-pre" class="ytxt-debug-pre" aria-label="Debug info"></pre>
+          </details>
+        </div>
       </div>
     </div>
   `;

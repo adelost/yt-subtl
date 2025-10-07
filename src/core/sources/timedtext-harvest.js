@@ -9,9 +9,8 @@ export const tryTimedtextHarvest = async (track, videoId, withTS) => {
       reportStatus('Using harvested timedtext response…');
       const ct = harvested.data.contentType || '';
       const text = parseTranscript(harvested.data.body, ct, withTS);
-      if (text?.trim()) return { ok: true, text, via: 'timedtext:harvest' };
+      if (text?.trim()) return { ok: true, text, via: 'timedtext:harvest', meta: { endpoint: 'timedtext', url: harvested.data.url, contentType: ct, size: harvested.data.size || harvested.data.body.length } };
     }
   } catch {}
   return { ok: false };
 };
-

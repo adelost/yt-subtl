@@ -7,7 +7,8 @@ export const state = {
   videoId: null,
   elements: null,
   isLoading: false,
-  isCollapsed: false
+  isCollapsed: false,
+  debug: { via: '', meta: null }
 };
 
 export const setStatus = (msg, kind = '') => {

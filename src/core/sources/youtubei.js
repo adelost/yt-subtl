@@ -12,7 +12,7 @@ export const tryYouTubeI = async (track, videoId, withTS) => {
       const resp = await fetchYTTranscript(harvested.data.params);
       if (resp?.ok) {
         const text = parseYouTubeITranscript(resp.json, withTS);
-        if (text?.trim()) return { ok: true, text, via: 'youtubei:harvest' };
+        if (text?.trim()) return { ok: true, text, via: 'youtubei:harvest', meta: { endpoint: 'youtubei', contentType: resp.contentType || 'application/json' } };
       }
     }
   } catch {}
@@ -24,10 +24,9 @@ export const tryYouTubeI = async (track, videoId, withTS) => {
       const resp = await fetchYTTranscript(track.params);
       if (resp?.ok) {
         const text = parseYouTubeITranscript(resp.json, withTS);
-        if (text?.trim()) return { ok: true, text, via: 'youtubei:track-params' };
+        if (text?.trim()) return { ok: true, text, via: 'youtubei:track-params', meta: { endpoint: 'youtubei', contentType: resp.contentType || 'application/json' } };
       }
     }
   } catch {}
   return { ok: false };
 };
-

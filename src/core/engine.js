@@ -18,10 +18,13 @@ export const fetchTranscript = async (track, videoId, withTS) => {
       const res = await step.fn(track, videoId, withTS);
       if (res?.ok && res.text?.trim()) {
         reportStatus(`Loaded via ${res.via || step.name}`);
+        try {
+          const meta = res.meta || {};
+          window.dispatchEvent(new CustomEvent('ytxt:debug', { detail: { via: res.via || step.name, meta } }));
+        } catch {}
         return res.text;
       }
     } catch {}
   }
   throw new Error('Transcript not available via YouTubeI, panel, or timedtext');
 };
-

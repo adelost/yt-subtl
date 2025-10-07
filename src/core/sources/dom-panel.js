@@ -51,27 +51,30 @@ const scrapeTranscript = (withTS) => {
         out.push(text);
       }
     }
-    return out.join('\n');
+    return { text: out.join('\n'), count: segments.length };
   } catch { return ''; }
 };
 
 export const tryDomPanel = async (_track, _videoId, withTS) => {
   try {
     // If already open, scrape directly
-    let text = scrapeTranscript(withTS);
+    let first = scrapeTranscript(withTS);
+    let text = typeof first === 'string' ? first : (first?.text || '');
+    const count = typeof first === 'object' && first ? first.count : undefined;
     if (text?.trim()) {
       reportStatus('Loaded via transcript panel');
-      return { ok: true, text, via: 'dom:panel' };
+      return { ok: true, text, via: 'dom:panel', meta: { endpoint: 'dom-panel', segments: count, lines: (text.split('\n')||[]).length } };
     }
     // Try to open the panel quietly and scrape
     reportStatus('Opening transcript panel…');
     await openTranscriptPanel();
-    text = scrapeTranscript(withTS);
+    const second = scrapeTranscript(withTS);
+    text = typeof second === 'string' ? second : (second?.text || '');
+    const count2 = typeof second === 'object' && second ? second.count : undefined;
     if (text?.trim()) {
       reportStatus('Loaded via transcript panel');
-      return { ok: true, text, via: 'dom:panel' };
+      return { ok: true, text, via: 'dom:panel', meta: { endpoint: 'dom-panel', segments: count2, lines: (text.split('\n')||[]).length } };
     }
   } catch {}
   return { ok: false };
 };
-

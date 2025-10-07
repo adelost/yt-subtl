@@ -10,6 +10,20 @@ window.addEventListener('ytxt:status', (e) => {
     setStatus(String(msg));
   } catch {}
 });
+
+// Capture debug meta and show in the panel's Debug section
+window.addEventListener('ytxt:debug', (e) => {
+  try {
+    const info = e?.detail || {};
+    state.debug = { via: info.via || '', meta: info.meta || null };
+    const pre = state.elements?.container?.querySelector('#ytxt-debug-pre');
+    if (pre) {
+      const meta = info.meta || {};
+      const safe = { via: info.via || '', meta: { ...meta, url: meta.url ? String(meta.url).slice(0, 220) : undefined } };
+      pre.textContent = JSON.stringify(safe, null, 2);
+    }
+  } catch {}
+});
 import { fetchTranscript } from '../core/engine.js';
 
 export const handleFetch = async () => {

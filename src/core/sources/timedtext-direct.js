@@ -48,10 +48,9 @@ export const tryTimedtextDirect = async (track, videoId, withTS) => {
         const resp = await fetchCaption(c);
         if (!resp?.ok) continue;
         const text = parseTranscript(resp.body, resp.contentType||'', withTS);
-        if (text?.trim()) return { ok: true, text, via: `timedtext:${label}${c!==urlStr?'-fb':''}` };
+        if (text?.trim()) return { ok: true, text, via: `timedtext:${label}${c!==urlStr?'-fb':''}`, meta: { endpoint: 'timedtext', url: c, contentType: resp.contentType || '', size: (resp.body || '').length } };
       }
     } catch {}
   }
   return { ok: false };
 };
-
