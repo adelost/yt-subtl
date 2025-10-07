@@ -6,6 +6,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
 
+    console.log('[background] Fetching:', msg.url.substring(0, 100));
+
     // Use 'include' to pass cookies for authenticated content (members-only, age-restricted)
     fetch(msg.url, { credentials: 'include' })
       .then(async (res) => {
@@ -14,10 +16,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           return;
         }
         const contentType = res.headers.get('content-type') || '';
+        console.log('[background] Response:', res.status, contentType);
+
         const body = await res.text();
+        console.log('[background] Body length:', body.length, 'First 200 chars:', body.substring(0, 200));
+
         sendResponse({ ok: res.ok, status: res.status, contentType, body });
       })
       .catch((err) => {
+        console.error('[background] Fetch error:', err);
         sendResponse({ ok: false, error: err?.message || String(err) });
       });
     return true; // keep message channel open for async response
