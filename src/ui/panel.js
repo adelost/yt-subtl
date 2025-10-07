@@ -1,0 +1,119 @@
+// UI panel creation and rendering
+
+import { state, updateTrackSelect } from './state.js';
+import { handleFetch, handleCopy, handleDownload, handleToggleCollapse } from './actions.js';
+
+const PANEL_ID = 'ytxt-panel';
+
+export const createPanel = () => {
+  if (document.getElementById(PANEL_ID)) return document.getElementById(PANEL_ID);
+
+  const container = document.createElement('div');
+  container.id = PANEL_ID;
+  container.className = 'ytxt-panel';
+  container.innerHTML = `
+    <div class="ytxt-header">
+      <div class="ytxt-title">
+        <svg class="ytxt-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h8v2H2v-2z"/>
+        </svg>
+        Transcript
+      </div>
+      <div class="ytxt-tools">
+        <label class="ytxt-toggle" title="Include timestamps">
+          <input type="checkbox" id="ytxt-timestamps" />
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5A5.5 5.5 0 118 2.5a5.5 5.5 0 010 11zM8 4v4.5l3 1.5-.6 1.1L6.5 9V4H8z"/>
+          </svg>
+        </label>
+        <button class="ytxt-btn ytxt-icon-btn" data-action="copy" title="Copy to clipboard (Ctrl+Shift+C)" aria-label="Copy">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M4 2a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V2zm2-1a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1V2a1 1 0 00-1-1H6zM2 5a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1v-1h1v1a2 2 0 01-2 2H2a2 2 0 01-2-2V6a2 2 0 012-2h1v1H2z"/>
+          </svg>
+        </button>
+        <button class="ytxt-btn ytxt-icon-btn" data-action="download" title="Download as .txt" aria-label="Download">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 12l-4-4h2.5V3h3v5H12l-4 4zm-6 1h12v2H2v-2z"/>
+          </svg>
+        </button>
+        <button class="ytxt-btn ytxt-icon-btn ytxt-collapse-btn" data-action="toggle-collapse" title="Collapse panel" aria-label="Collapse">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 10l-4-4h8l-4 4z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="ytxt-body">
+      <div class="ytxt-row">
+        <select id="ytxt-track" class="ytxt-select" title="Select caption track" aria-label="Caption track"></select>
+        <button class="ytxt-cta" data-action="fetch">
+          <span class="ytxt-btn-text">Get Transcript</span>
+          <span class="ytxt-spinner" style="display: none;"></span>
+        </button>
+      </div>
+
+      <div class="ytxt-output-wrapper">
+        <textarea id="ytxt-output" class="ytxt-output" rows="16" placeholder="Select a track and click 'Get Transcript' to load subtitles..." spellcheck="false" aria-label="Transcript output"></textarea>
+        <div class="ytxt-empty-state" style="display: none;">
+          <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor" opacity="0.3">
+            <path d="M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h8v2H2v-2z"/>
+          </svg>
+          <p>No transcript loaded yet</p>
+        </div>
+      </div>
+
+      <div class="ytxt-footer">
+        <div class="ytxt-footnote" id="ytxt-status"></div>
+        <div class="ytxt-stats" id="ytxt-stats"></div>
+      </div>
+    </div>
+  `;
+
+  const sidebar = document.getElementById('secondary') || document.querySelector('#secondary');
+  if (sidebar) {
+    sidebar.prepend(container);
+  } else {
+    container.classList.add('ytxt-floating');
+    document.body.appendChild(container);
+  }
+
+  // Cache elements
+  state.elements = {
+    container,
+    sel: container.querySelector('#ytxt-track'),
+    btnGet: container.querySelector('[data-action="fetch"]'),
+    output: container.querySelector('#ytxt-output'),
+    chkTS: container.querySelector('#ytxt-timestamps'),
+    status: container.querySelector('#ytxt-status'),
+    stats: container.querySelector('#ytxt-stats'),
+    body: container.querySelector('.ytxt-body'),
+    spinner: container.querySelector('.ytxt-spinner'),
+    btnText: container.querySelector('.ytxt-btn-text')
+  };
+
+  // Event delegation
+  container.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    if (action === 'fetch') {
+      await handleFetch();
+    } else if (action === 'copy') {
+      await handleCopy();
+    } else if (action === 'download') {
+      handleDownload();
+    } else if (action === 'toggle-collapse') {
+      handleToggleCollapse();
+    }
+  });
+
+  updateTrackSelect(state.tracks);
+  return container;
+};
+
+export const destroyPanel = () => {
+  const el = document.getElementById(PANEL_ID);
+  if (el?.parentNode) el.parentNode.removeChild(el);
+};

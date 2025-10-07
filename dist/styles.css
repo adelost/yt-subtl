@@ -1,0 +1,296 @@
+:root {
+  --ytxt-bg: #0f0f0f;
+  --ytxt-fg: #f1f1f1;
+  --ytxt-muted: #aaa;
+  --ytxt-accent: #3ea6ff;
+  --ytxt-border: #303030;
+  --ytxt-ok: #38b000;
+  --ytxt-warn: #f5a623;
+  --ytxt-error: #ff4d4f;
+  --ytxt-shadow: rgba(0,0,0,0.35);
+  --ytxt-spacing: 8px;
+  --ytxt-radius: 8px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --ytxt-bg: #fff;
+    --ytxt-fg: #111;
+    --ytxt-muted: #555;
+    --ytxt-accent: #065fd4;
+    --ytxt-border: #e5e5e5;
+    --ytxt-shadow: rgba(0,0,0,0.15);
+  }
+}
+
+.ytxt-panel {
+  font: 13px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: var(--ytxt-fg);
+  background: var(--ytxt-bg);
+  border: 1px solid var(--ytxt-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px var(--ytxt-shadow);
+  padding: 0;
+  margin-bottom: 16px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.ytxt-panel:hover {
+  box-shadow: 0 4px 16px var(--ytxt-shadow);
+}
+.ytxt-panel.ytxt-collapsed .ytxt-body {
+  display: none;
+}
+.ytxt-panel.ytxt-collapsed .ytxt-collapse-btn svg {
+  transform: rotate(180deg);
+}
+
+.ytxt-floating {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: min(520px, 42vw);
+  z-index: 10000;
+}
+
+.ytxt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ytxt-spacing);
+  padding: 14px 16px;
+  background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.02) 100%);
+  border-bottom: 1px solid var(--ytxt-border);
+}
+
+.ytxt-body {
+  padding: 14px 16px;
+}
+
+.ytxt-title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ytxt-icon {
+  opacity: 0.7;
+}
+
+.ytxt-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ytxt-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  color: var(--ytxt-muted);
+}
+.ytxt-toggle:hover {
+  background: rgba(128,128,128,0.1);
+}
+.ytxt-toggle input[type="checkbox"] {
+  display: none;
+}
+.ytxt-toggle svg {
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.ytxt-toggle:has(input:checked) svg {
+  opacity: 1;
+  color: var(--ytxt-accent);
+}
+
+.ytxt-btn {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--ytxt-muted);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-weight: 500;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ytxt-btn:hover {
+  background: rgba(128,128,128,0.12);
+  color: var(--ytxt-fg);
+}
+.ytxt-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ytxt-btn.ytxt-success {
+  color: var(--ytxt-ok);
+  background: rgba(56,176,0,0.1);
+}
+
+.ytxt-icon-btn {
+  padding: 6px;
+}
+
+.ytxt-collapse-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.ytxt-cta {
+  cursor: pointer;
+  background: var(--ytxt-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--ytxt-radius);
+  padding: 9px 18px;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.ytxt-cta:hover:not(:disabled) {
+  background: var(--ytxt-accent);
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(62,166,255,0.3);
+}
+.ytxt-cta:active:not(:disabled) {
+  transform: translateY(0);
+}
+.ytxt-cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ytxt-cta.ytxt-loading {
+  opacity: 0.8;
+}
+
+.ytxt-row {
+  display: flex;
+  gap: var(--ytxt-spacing);
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+
+.ytxt-select {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--ytxt-border);
+  border-radius: var(--ytxt-radius);
+  background: rgba(128,128,128,0.05);
+  color: var(--ytxt-fg);
+  font-size: 13px;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.ytxt-select:hover {
+  border-color: var(--ytxt-accent);
+  background: rgba(128,128,128,0.08);
+}
+.ytxt-select:focus {
+  outline: none;
+  border-color: var(--ytxt-accent);
+  box-shadow: 0 0 0 3px rgba(62,166,255,0.1);
+}
+.ytxt-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ytxt-output-wrapper {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.ytxt-output {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 220px;
+  border: 1px solid var(--ytxt-border);
+  border-radius: var(--ytxt-radius);
+  padding: 12px;
+  background: rgba(128,128,128,0.03);
+  color: var(--ytxt-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  transition: all 0.15s;
+}
+.ytxt-output:focus {
+  outline: none;
+  border-color: var(--ytxt-accent);
+  background: rgba(128,128,128,0.05);
+  box-shadow: 0 0 0 3px rgba(62,166,255,0.08);
+}
+.ytxt-output.ytxt-success-flash {
+  animation: ytxt-flash 0.6s ease;
+}
+
+@keyframes ytxt-flash {
+  0%, 100% { background: rgba(128,128,128,0.03); }
+  50% { background: rgba(56,176,0,0.08); }
+}
+
+.ytxt-empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+  color: var(--ytxt-muted);
+  font-size: 13px;
+}
+
+.ytxt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 20px;
+}
+
+.ytxt-footnote {
+  font-size: 12px;
+  color: var(--ytxt-muted);
+  flex: 1;
+}
+.ytxt-ok { color: var(--ytxt-ok); }
+.ytxt-warn { color: var(--ytxt-warn); }
+.ytxt-error { color: var(--ytxt-error); }
+
+.ytxt-stats {
+  font-size: 11px;
+  color: var(--ytxt-muted);
+  opacity: 0.7;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ytxt-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ytxt-spin 0.6s linear infinite;
+}
+
+@keyframes ytxt-spin {
+  to { transform: rotate(360deg); }
+}
