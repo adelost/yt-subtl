@@ -40,10 +40,17 @@ export const updateStats = (text) => {
 export const updateTrackSelect = (tracks) => {
   if (!state.elements) return;
   const { sel, btnGet } = state.elements;
-  sel.innerHTML = '';
+
+  // Clear all options using DOM methods (TrustedHTML-safe)
+  while (sel.firstChild) {
+    sel.removeChild(sel.firstChild);
+  }
 
   if (!tracks?.length) {
-    sel.innerHTML = '<option value="">No captions available</option>';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'No captions available';
+    sel.appendChild(opt);
     sel.disabled = true;
     btnGet.disabled = true;
     return;
