@@ -18,6 +18,12 @@ window.addEventListener('message', async (event) => {
       { type: 'FETCH_CAPTION', url: msg.url },
       (resp) => {
         console.log('[ytxt-bridge] Got response from background:', resp, chrome.runtime.lastError);
+
+        // Log debug info to main console
+        if (resp?._debug) {
+          console.log('[background→bridge] Fetch debug:', resp._debug);
+        }
+
         // Post response back to MAIN world
         window.postMessage({
           source: 'ytxt-bridge',
