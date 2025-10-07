@@ -14,7 +14,8 @@ export const fetchCaption = async (url) => {
   try {
     const res = await fetch(url, {
       credentials: 'include',
-      mode: 'cors'
+      // Use same-origin semantics; YouTube may reject CORS-mode requests
+      mode: 'same-origin'
     });
 
     const contentType = res.headers.get('content-type') || 'unknown';
@@ -25,32 +26,88 @@ export const fetchCaption = async (url) => {
       statusText: res.statusText,
       redirected: res.redirected,
       type: res.type,
-      url: res.url.substring(0, 150),
+      url: res.url,
       contentType: contentType
     };
 
-    // Try reading body
-    const body = await res.text();
+    // Try reading body, with arrayBuffer fallback if text is empty/unavailable
+    let body = '';
+    let textErr = null;
+    try {
+      body = await res.clone().text();
+    } catch (e) {
+      textErr = e;
+    }
+
+    if (!body || body.length === 0) {
+      try {
+        const ab = await res.clone().arrayBuffer();
+        if (ab && ab.byteLength > 0) {
+          // Attempt to decode using TextDecoder; default to utf-8
+          const charsetMatch = /charset=([^;]+)/i.exec(contentType || '') || [];
+          const charset = (charsetMatch[1] || 'utf-8').trim();
+          try {
+            const dec = new TextDecoder(charset);
+            body = dec.decode(ab);
+          } catch (_) {
+            const dec = new TextDecoder('utf-8');
+            body = dec.decode(ab);
+          }
+        }
+      } catch (e) {
+        // Ignore; will be handled below with headers/metadata
+      }
+    }
 
     if (!res.ok) {
+      const headers = {};
+      res.headers.forEach((value, key) => { headers[key] = value; });
       return {
         ok: false,
         error: `HTTP ${res.status}`,
-        details: `Response: ${JSON.stringify(responseInfo)}\nBody: ${body.substring(0, 300)}`
+        details: `Response: ${JSON.stringify(responseInfo)}\nHeaders: ${JSON.stringify(headers)}\nBody: ${String(body || '').substring(0, 500)}`
       };
     }
 
-    if (body.length === 0) {
+    if (!body || body.length === 0) {
       // Get headers for debugging
       const headers = {};
       res.headers.forEach((value, key) => {
         headers[key] = value;
       });
 
+      // As a last resort, try XHR same-origin with credentials
+      try {
+        const { xhrBody, xhrType } = await new Promise((resolve, reject) => {
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.responseType = 'text';
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Accept', '*/*');
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve({ xhrBody: xhr.responseText || '', xhrType: xhr.getResponseHeader('Content-Type') || '' });
+              }
+              else reject(new Error(`XHR status ${xhr.status}`));
+            };
+            xhr.onerror = () => reject(new Error('XHR network error'));
+            xhr.send();
+          } catch (e) { reject(e); }
+        });
+
+        if (xhrBody && xhrBody.length > 0) {
+          const finalType = xhrType || contentType || '';
+          return { ok: true, status: res.status, contentType: finalType, body: xhrBody };
+        }
+      } catch (e) {
+        // fall through to error
+      }
+
       return {
         ok: false,
         error: 'Empty response body',
-        details: `Response info: ${JSON.stringify(responseInfo)}\nHeaders: ${JSON.stringify(headers)}\nRequested: ${url.substring(0, 150)}`
+        details: `Response info: ${JSON.stringify(responseInfo)}\nHeaders: ${JSON.stringify(headers)}\nRequested: ${url}`
       };
     }
 
@@ -70,5 +127,60 @@ export const fetchCaption = async (url) => {
       error: err.message || String(err),
       details: `Network error: ${err.message}\nURL: ${url.substring(0, 150)}`
     };
+  }
+};
+
+// Fetch YouTubeI get_transcript JSON using the track's params
+export const fetchYTTranscript = async (params) => {
+  try {
+    const ytcfg = window.ytcfg?.get ? window.ytcfg : null;
+    const apiKey = ytcfg?.get?.('INNERTUBE_API_KEY') || null;
+    const ctx = ytcfg?.get?.('INNERTUBE_CONTEXT') || null;
+    const clientName = ytcfg?.get?.('INNERTUBE_CLIENT_NAME') || 'WEB';
+    const clientVersion = ytcfg?.get?.('INNERTUBE_CLIENT_VERSION') || '2.20241007.00.00';
+    if (!apiKey) {
+      return { ok: false, error: 'Missing INNERTUBE_API_KEY' };
+    }
+
+    const body = {
+      context: ctx || {
+        client: {
+          hl: (navigator.language || 'en').replace('_', '-'),
+          gl: 'US',
+          clientName,
+          clientVersion
+        }
+      },
+      params
+    };
+
+    const url = `/youtubei/v1/get_transcript?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      mode: 'same-origin',
+      headers: {
+        'content-type': 'application/json',
+        'x-youtube-client-name': String(clientName),
+        'x-youtube-client-version': String(clientVersion)
+      },
+      body: JSON.stringify(body)
+    });
+
+    const contentType = res.headers.get('content-type') || '';
+    const text = await res.text();
+    if (!res.ok) {
+      return { ok: false, error: `HTTP ${res.status}`, details: text.substring(0, 300) };
+    }
+    if (!text) {
+      return { ok: false, error: 'Empty YouTubeI response' };
+    }
+    let json;
+    try { json = JSON.parse(text); } catch (e) {
+      return { ok: false, error: 'Invalid JSON from YouTubeI', details: text.substring(0, 200) };
+    }
+    return { ok: true, json, contentType };
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
   }
 };

@@ -1,7 +1,16 @@
 // Event handlers and actions
 
 import { state, setStatus, setLoading, updateStats } from './state.js';
-import { TranscriptFetcher } from '../lib/fetcher.js';
+// Live status updates from fetcher (MAIN world)
+window.addEventListener('ytxt:status', (e) => {
+  try {
+    const msg = e?.detail || '';
+    if (!msg) return;
+    if (!state.elements) return;
+    setStatus(String(msg));
+  } catch {}
+});
+import { fetchTranscript } from '../core/engine.js';
 
 export const handleFetch = async () => {
   try {
@@ -22,8 +31,7 @@ export const handleFetch = async () => {
     setLoading(true);
     setStatus('Fetching transcript...');
 
-    const fetcher = new TranscriptFetcher(track);
-    const text = await fetcher.fetch(state.elements.chkTS.checked);
+    const text = await fetchTranscript(track, state.videoId, state.elements.chkTS.checked);
 
     state.elements.output.value = text;
     updateStats(text);

@@ -72,3 +72,63 @@ export const parseTranscript = (body, contentType, withTS) => {
   if (contentType.includes('xml')) return xmlToText(body, withTS);
   return vttToText(body, withTS);
 };
+
+// --- YouTubeI get_transcript JSON parser ---------------------------------
+const getTextFromRuns = (runs) => (Array.isArray(runs) ? runs.map(r => r.text || '').join('') : '');
+
+const extractCueText = (cue) => {
+  if (!cue) return '';
+  if (typeof cue.simpleText === 'string') return cue.simpleText;
+  if (Array.isArray(cue.runs)) return getTextFromRuns(cue.runs);
+  return '';
+};
+
+const toMs = (txt) => {
+  if (!txt) return 0;
+  // Formats like 0:05, 01:02:03 etc. We keep seconds precision.
+  const parts = String(txt).split(':').map(Number);
+  let s = 0;
+  if (parts.length === 3) s = parts[0] * 3600 + parts[1] * 60 + parts[2];
+  else if (parts.length === 2) s = parts[0] * 60 + parts[1];
+  else s = parts[0] || 0;
+  return Math.round(s * 1000);
+};
+
+export const parseYouTubeITranscript = (data, withTS) => {
+  try {
+    if (!data) return '';
+    // Traverse to find any cue groups
+    const groups = [];
+    const stack = [data];
+    while (stack.length) {
+      const node = stack.pop();
+      if (!node) continue;
+      if (Array.isArray(node)) { stack.push(...node); continue; }
+      if (typeof node === 'object') {
+        if (node.transcriptCueGroupRenderer) {
+          groups.push(node.transcriptCueGroupRenderer);
+        }
+        for (const k in node) stack.push(node[k]);
+      }
+    }
+    if (!groups.length) return '';
+
+    const lines = [];
+    for (const g of groups) {
+      const cueR = g.cue?.transcriptCueRenderer || g.transcriptCueRenderer || null;
+      const cueObj = cueR || g.cue;
+      const text = extractCueText(cueObj?.cue || cueObj?.text || cueObj);
+      if (!text) continue;
+      if (withTS) {
+        const ts = cueObj?.startTimeText?.simpleText || g.formattedStartTime?.simpleText || null;
+        const ms = ts ? toMs(ts) : Number(cueObj?.startOffsetMs) || 0;
+        lines.push(`[${msToTimestamp(ms)}] ${text}`);
+      } else {
+        lines.push(text);
+      }
+    }
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+};

@@ -1,6 +1,7 @@
 // Main entry point for YouTube Transcript extension
 
 import { extractCaptionTracks } from './lib/youtube.js';
+import { injectObserver, onHarvestEvent } from './lib/harvest.js';
 import { state, updateTrackSelect } from './ui/state.js';
 import { createPanel, destroyPanel } from './ui/panel.js';
 import { handleCopy } from './ui/actions.js';
@@ -27,6 +28,11 @@ const onNavigate = () => {
 };
 
 // --- Init ---------------------------------------------------------------
+// Install page-context observer and bridge harvested templates
+injectObserver();
+window.addEventListener('ytxt:transcript-template', (e) => {
+  try { onHarvestEvent(e.detail); } catch {}
+});
 window.addEventListener('yt-navigate-finish', onNavigate);
 window.addEventListener('yt-page-data-updated', updateCaptions);
 

@@ -15,13 +15,24 @@ export const extractCaptionTracks = () => {
     const videoId = new URL(location.href).searchParams.get('v') ||
                     pr?.videoDetails?.videoId || null;
 
-    // Debug: log extracted track URLs
+    // Debug: log extracted track URLs (full baseUrl + diagnostics)
     if (tracks?.length) {
-      console.log('[ytxt] Extracted tracks:', tracks.map(t => ({
-        lang: t.languageCode,
-        kind: t.kind,
-        baseUrl: t.baseUrl?.substring(0, 150)
-      })));
+      console.log('[ytxt] Extracted tracks:', tracks.map(t => {
+        const s = String(t.baseUrl || '');
+        return {
+          lang: t.languageCode,
+          kind: t.kind,
+          vssId: t.vssId || t.vss_id,
+          hasParamsProp: !!t.params,
+          paramsLen: t.params ? String(t.params).length : 0,
+          keys: Object.keys(t || {}).slice(0, 12),
+          hasLangParam: /[?&]lang=/.test(s),
+          hasFmtParam: /[?&]fmt=/.test(s),
+          urlLen: s.length,
+          head: s.slice(0, 140),
+          tail: s.slice(-140)
+        };
+      }));
     }
 
     return { tracks, videoId };
