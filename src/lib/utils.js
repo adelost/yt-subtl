@@ -12,6 +12,7 @@ export const msToTimestamp = (ms) => {
 export const fetchCaption = (url) => new Promise((resolve, reject) => {
   // Generate unique request ID
   const requestId = `ytxt-${Date.now()}-${Math.random()}`;
+  console.log('[ytxt-main] fetchCaption called:', requestId, url);
 
   // Listen for response from bridge
   const listener = (event) => {
@@ -19,6 +20,7 @@ export const fetchCaption = (url) => new Promise((resolve, reject) => {
     const msg = event.data;
     if (msg?.source !== 'ytxt-bridge' || msg?.requestId !== requestId) return;
 
+    console.log('[ytxt-main] Received response from bridge:', msg);
     window.removeEventListener('message', listener);
 
     if (msg.error) return reject(new Error(msg.error));
@@ -29,6 +31,7 @@ export const fetchCaption = (url) => new Promise((resolve, reject) => {
   window.addEventListener('message', listener);
 
   // Post message to bridge (ISOLATED world)
+  console.log('[ytxt-main] Posting message to bridge');
   window.postMessage({
     source: 'ytxt-main',
     type: 'FETCH_CAPTION',
@@ -38,6 +41,7 @@ export const fetchCaption = (url) => new Promise((resolve, reject) => {
 
   // Timeout after 10 seconds
   setTimeout(() => {
+    console.log('[ytxt-main] Request timeout:', requestId);
     window.removeEventListener('message', listener);
     reject(new Error('Request timeout'));
   }, 10000);
