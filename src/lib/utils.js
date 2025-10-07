@@ -12,23 +12,45 @@ export const msToTimestamp = (ms) => {
 export const fetchCaption = async (url) => {
   // Fetch directly from MAIN world - we have access to YouTube's cookies here
   try {
-    const res = await fetch(url, { credentials: 'include' });
+    const res = await fetch(url, {
+      credentials: 'include',
+      mode: 'cors'
+    });
+
     const contentType = res.headers.get('content-type') || 'unknown';
+
+    // Collect response metadata for debugging
+    const responseInfo = {
+      status: res.status,
+      statusText: res.statusText,
+      redirected: res.redirected,
+      type: res.type,
+      url: res.url.substring(0, 150),
+      contentType: contentType
+    };
+
+    // Try reading body
     const body = await res.text();
 
     if (!res.ok) {
       return {
         ok: false,
         error: `HTTP ${res.status}`,
-        details: `Status: ${res.status}, Content-Type: ${contentType}, Body: ${body.substring(0, 500)}`
+        details: `Response: ${JSON.stringify(responseInfo)}\nBody: ${body.substring(0, 300)}`
       };
     }
 
     if (body.length === 0) {
+      // Get headers for debugging
+      const headers = {};
+      res.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+
       return {
         ok: false,
-        error: 'Empty response',
-        details: `Status: ${res.status}, Content-Type: ${contentType}, Body is empty. URL: ${url.substring(0, 100)}`
+        error: 'Empty response body',
+        details: `Response info: ${JSON.stringify(responseInfo)}\nHeaders: ${JSON.stringify(headers)}\nRequested: ${url.substring(0, 150)}`
       };
     }
 
@@ -37,7 +59,7 @@ export const fetchCaption = async (url) => {
       return {
         ok: false,
         error: 'Got HTML instead of captions',
-        details: `Received HTML page instead of caption data. Body preview: ${body.substring(0, 500)}`
+        details: `Received HTML page instead of caption data.\nResponse: ${JSON.stringify(responseInfo)}\nBody preview: ${body.substring(0, 500)}`
       };
     }
 
@@ -46,7 +68,7 @@ export const fetchCaption = async (url) => {
     return {
       ok: false,
       error: err.message || String(err),
-      details: `Network error: ${err.message}`
+      details: `Network error: ${err.message}\nURL: ${url.substring(0, 150)}`
     };
   }
 };

@@ -15,6 +15,15 @@ export const extractCaptionTracks = () => {
     const videoId = new URL(location.href).searchParams.get('v') ||
                     pr?.videoDetails?.videoId || null;
 
+    // Debug: log extracted track URLs
+    if (tracks?.length) {
+      console.log('[ytxt] Extracted tracks:', tracks.map(t => ({
+        lang: t.languageCode,
+        kind: t.kind,
+        baseUrl: t.baseUrl?.substring(0, 150)
+      })));
+    }
+
     return { tracks, videoId };
   } catch (e) {
     return { tracks: null, videoId: null, error: String(e) };
