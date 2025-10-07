@@ -23,8 +23,7 @@
       "css": [
         "styles.css"
       ],
-      "run_at": "document_idle",
-      "world": "MAIN"
+      "run_at": "document_idle"
     }
   ],
   "icons": {}
