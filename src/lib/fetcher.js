@@ -15,18 +15,33 @@ export class TranscriptFetcher {
       { fmt: null, type: null }
     ];
 
+    const errors = [];
+
     for (const { fmt } of formats) {
       try {
         const url = new URL(this.track.baseUrl);
         if (fmt) url.searchParams.set('fmt', fmt);
 
         const resp = await fetchCaption(url.toString());
+
+        if (!resp.ok) {
+          errors.push(`${fmt || 'default'}: ${resp.error} (${resp.details || 'no details'})`);
+          continue;
+        }
+
         const text = parseTranscript(resp.body, resp.contentType || '', withTS);
         if (text?.trim()) return text;
+
+        errors.push(`${fmt || 'default'}: Empty or unparseable response`);
       } catch (err) {
-        console.warn(`Format ${fmt} failed:`, err);
+        errors.push(`${fmt || 'default'}: ${err.message}`);
       }
     }
-    throw new Error('All formats failed');
+
+    // Create detailed error message
+    const errorMsg = `All formats failed:\n${errors.join('\n')}`;
+    const error = new Error(errorMsg);
+    error.details = errors;
+    throw error;
   }
 }

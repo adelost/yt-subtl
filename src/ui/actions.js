@@ -34,7 +34,9 @@ export const handleFetch = async () => {
     setTimeout(() => state.elements.output?.classList.remove('ytxt-success-flash'), 600);
   } catch (err) {
     console.error(err);
-    setStatus('Failed: ' + err.message, 'error');
+    // Show detailed error message in UI
+    const errorMsg = err.message || 'Unknown error';
+    setStatus(errorMsg, 'error');
   } finally {
     setLoading(false);
   }

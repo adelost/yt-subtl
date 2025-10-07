@@ -11,26 +11,33 @@ export const msToTimestamp = (ms) => {
 
 export const fetchCaption = async (url) => {
   // Fetch directly from MAIN world - we have access to YouTube's cookies here
-  console.log('[ytxt] Fetching caption:', url.substring(0, 100));
-
   try {
     const res = await fetch(url, { credentials: 'include' });
-    const contentType = res.headers.get('content-type') || '';
+    const contentType = res.headers.get('content-type') || 'unknown';
     const body = await res.text();
 
-    console.log('[ytxt] Response:', {
-      status: res.status,
-      contentType,
-      bodyLength: body.length
-    });
-
     if (!res.ok) {
-      return { ok: false, error: `HTTP ${res.status}` };
+      return {
+        ok: false,
+        error: `HTTP ${res.status}`,
+        details: `Status: ${res.status}, Content-Type: ${contentType}, Body length: ${body.length}`
+      };
+    }
+
+    if (body.length === 0) {
+      return {
+        ok: false,
+        error: 'Empty response',
+        details: `Status: ${res.status}, Content-Type: ${contentType}, Body is empty`
+      };
     }
 
     return { ok: true, status: res.status, contentType, body };
   } catch (err) {
-    console.error('[ytxt] Fetch error:', err);
-    return { ok: false, error: err.message || String(err) };
+    return {
+      ok: false,
+      error: err.message || String(err),
+      details: `Network error: ${err.message}`
+    };
   }
 };

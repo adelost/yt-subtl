@@ -259,7 +259,7 @@
 
 .ytxt-footer {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   min-height: 20px;
@@ -269,6 +269,8 @@
   font-size: 12px;
   color: var(--ytxt-muted);
   flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .ytxt-ok { color: var(--ytxt-ok); }
 .ytxt-warn { color: var(--ytxt-warn); }
