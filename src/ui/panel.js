@@ -5,13 +5,26 @@ import { handleFetch, handleCopy, handleDownload, handleToggleCollapse } from '.
 
 const PANEL_ID = 'ytxt-panel';
 
+// Helper to safely set innerHTML with TrustedHTML support
+const setTrustedHTML = (element, htmlString) => {
+  if (window.trustedTypes && trustedTypes.createPolicy) {
+    const policy = trustedTypes.createPolicy('ytxt-html', {
+      createHTML: (string) => string
+    });
+    element.innerHTML = policy.createHTML(htmlString);
+  } else {
+    element.innerHTML = htmlString;
+  }
+};
+
 export const createPanel = () => {
   if (document.getElementById(PANEL_ID)) return document.getElementById(PANEL_ID);
 
   const container = document.createElement('div');
   container.id = PANEL_ID;
   container.className = 'ytxt-panel';
-  container.innerHTML = `
+
+  const panelHTML = `
     <div class="ytxt-header">
       <div class="ytxt-title">
         <svg class="ytxt-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -69,6 +82,8 @@ export const createPanel = () => {
       </div>
     </div>
   `;
+
+  setTrustedHTML(container, panelHTML);
 
   const sidebar = document.getElementById('secondary') || document.querySelector('#secondary');
   if (sidebar) {
