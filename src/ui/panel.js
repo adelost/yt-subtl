@@ -34,7 +34,7 @@ export const createPanel = () => {
       </div>
       <div class="ytxt-tools">
         <label class="ytxt-toggle" title="Include timestamps">
-          <input type="checkbox" id="ytxt-timestamps" />
+          <input type="checkbox" id="ytxt-timestamps" checked />
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5A5.5 5.5 0 118 2.5a5.5 5.5 0 010 11zM8 4v4.5l3 1.5-.6 1.1L6.5 9V4H8z"/>
           </svg>
@@ -66,7 +66,7 @@ export const createPanel = () => {
         </button>
       </div>
 
-      <div class="ytxt-output-wrapper">
+      <div class="ytxt-output-wrapper" style="display: none;">
         <textarea id="ytxt-output" class="ytxt-output" rows="16" placeholder="Select a track and click 'Get Transcript' to load subtitles..." spellcheck="false" aria-label="Transcript output"></textarea>
         <div class="ytxt-empty-state" style="display: none;">
           <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor" opacity="0.3">
@@ -104,6 +104,7 @@ export const createPanel = () => {
     container,
     sel: container.querySelector('#ytxt-track'),
     btnGet: container.querySelector('[data-action="fetch"]'),
+    outputWrapper: container.querySelector('.ytxt-output-wrapper'),
     output: container.querySelector('#ytxt-output'),
     chkTS: container.querySelector('#ytxt-timestamps'),
     status: container.querySelector('#ytxt-status'),

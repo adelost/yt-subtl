@@ -47,6 +47,8 @@ export const handleFetch = async () => {
 
     const text = await fetchTranscript(track, state.videoId, state.elements.chkTS.checked);
 
+    // Reveal output only after successful fetch
+    if (state.elements.outputWrapper) state.elements.outputWrapper.style.display = '';
     state.elements.output.value = text;
     updateStats(text);
     setStatus(`Loaded from ${track.languageCode}${track.kind === 'asr' ? ' (auto)' : ''}`, 'ok');
@@ -54,11 +56,17 @@ export const handleFetch = async () => {
     // Add success animation
     state.elements.output.classList.add('ytxt-success-flash');
     setTimeout(() => state.elements.output?.classList.remove('ytxt-success-flash'), 600);
+    // Uncollapse if collapsed
+    if (state.isCollapsed) {
+      state.isCollapsed = false;
+      state.elements.container.classList.toggle('ytxt-collapsed', false);
+    }
   } catch (err) {
     console.error(err);
     // Show detailed error message in UI
     const errorMsg = err.message || 'Unknown error';
     setStatus(errorMsg, 'error');
+    // Keep output hidden on error for a minimal UI
   } finally {
     setLoading(false);
   }

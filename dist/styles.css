@@ -207,6 +207,17 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+.ytxt-select option {
+  background: #fff;
+  color: #0f0f0f;
+  padding: 4px 8px;
+}
+@media (prefers-color-scheme: dark) {
+  .ytxt-select option {
+    background: #0f0f0f;
+    color: #f1f1f1;
+  }
+}
 
 .ytxt-output-wrapper {
   position: relative;
