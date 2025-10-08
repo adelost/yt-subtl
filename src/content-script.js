@@ -4,7 +4,7 @@ import { extractCaptionTracks } from './lib/youtube.js';
 import { injectObserver, onHarvestEvent } from './lib/harvest.js';
 import { state, updateTrackSelect } from './ui/state.js';
 import { createPanel, destroyPanel } from './ui/panel.js';
-import { handleCopy } from './ui/actions.js';
+import { handleCopy, handleFetch } from './ui/actions.js';
 
 // --- Lifecycle ----------------------------------------------------------
 const updateCaptions = () => {
@@ -14,6 +14,13 @@ const updateCaptions = () => {
 
   if (state.elements) {
     updateTrackSelect(state.tracks);
+
+    // Auto-load if enabled
+    const autoloadEnabled = localStorage.getItem('ytxt-autoload') === 'true';
+    if (autoloadEnabled && state.tracks?.length > 0 && !state.elements.output.value) {
+      // Small delay to ensure UI is ready
+      setTimeout(() => handleFetch(), 500);
+    }
   }
 };
 

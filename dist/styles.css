@@ -224,6 +224,44 @@
   margin-bottom: 10px;
 }
 
+.ytxt-search-wrapper {
+  position: relative;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ytxt-search {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--ytxt-border);
+  border-radius: var(--ytxt-radius);
+  background: rgba(128,128,128,0.05);
+  color: var(--ytxt-fg);
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.ytxt-search:focus {
+  outline: none;
+  border-color: var(--ytxt-accent);
+  box-shadow: 0 0 0 3px rgba(62,166,255,0.1);
+}
+
+.ytxt-search::placeholder {
+  color: var(--ytxt-muted);
+  opacity: 0.6;
+}
+
+.ytxt-search-count {
+  font-size: 12px;
+  color: var(--ytxt-muted);
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: right;
+}
+
 .ytxt-output {
   width: 100%;
   box-sizing: border-box;

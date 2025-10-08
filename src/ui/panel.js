@@ -39,6 +39,13 @@ export const createPanel = () => {
             <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5A5.5 5.5 0 118 2.5a5.5 5.5 0 010 11zM8 4v4.5l3 1.5-.6 1.1L6.5 9V4H8z"/>
           </svg>
         </label>
+        <label class="ytxt-toggle" title="Auto-load transcript when page loads">
+          <input type="checkbox" id="ytxt-autoload" />
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 3a5 5 0 104.546 2.914.5.5 0 01.908-.417A6 6 0 118 2v1z"/>
+            <path d="M8 4.466V.534a.25.25 0 01.41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 018 4.466z"/>
+          </svg>
+        </label>
         <button class="ytxt-btn ytxt-icon-btn" data-action="copy" title="Copy to clipboard (Ctrl+Shift+C)" aria-label="Copy">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M4 2a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V2zm2-1a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1V2a1 1 0 00-1-1H6zM2 5a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1v-1h1v1a2 2 0 01-2 2H2a2 2 0 01-2-2V6a2 2 0 012-2h1v1H2z"/>
@@ -73,6 +80,10 @@ export const createPanel = () => {
       </div>
 
       <div class="ytxt-output-wrapper" style="display: none;">
+        <div class="ytxt-search-wrapper">
+          <input type="text" id="ytxt-search" class="ytxt-search" placeholder="Search transcript..." aria-label="Search" />
+          <span class="ytxt-search-count" id="ytxt-search-count"></span>
+        </div>
         <textarea id="ytxt-output" class="ytxt-output" rows="16" placeholder="Select a track and click 'Get Transcript' to load subtitles..." spellcheck="false" aria-label="Transcript output"></textarea>
         <div class="ytxt-empty-state" style="display: none;">
           <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor" opacity="0.3">
@@ -113,6 +124,9 @@ export const createPanel = () => {
     outputWrapper: container.querySelector('.ytxt-output-wrapper'),
     output: container.querySelector('#ytxt-output'),
     chkTS: container.querySelector('#ytxt-timestamps'),
+    chkAutoload: container.querySelector('#ytxt-autoload'),
+    searchInput: container.querySelector('#ytxt-search'),
+    searchCount: container.querySelector('#ytxt-search-count'),
     status: container.querySelector('#ytxt-status'),
     stats: container.querySelector('#ytxt-stats'),
     body: container.querySelector('.ytxt-body'),
@@ -138,6 +152,78 @@ export const createPanel = () => {
       handleToggleCollapse();
     }
   });
+
+  // Search functionality
+  if (state.elements.searchInput) {
+    state.elements.searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const text = state.elements.output.value;
+
+      if (!query) {
+        state.elements.searchCount.textContent = '';
+        return;
+      }
+
+      // Count matches
+      const lines = text.split('\n');
+      const matches = lines.filter(line => line.toLowerCase().includes(query));
+      state.elements.searchCount.textContent = `${matches.length} match${matches.length !== 1 ? 'es' : ''}`;
+
+      // Highlight first match by scrolling to it
+      if (matches.length > 0) {
+        const firstMatchIndex = text.toLowerCase().indexOf(query);
+        if (firstMatchIndex !== -1) {
+          state.elements.output.focus();
+          state.elements.output.setSelectionRange(firstMatchIndex, firstMatchIndex + query.length);
+          state.elements.output.blur();
+        }
+      }
+    });
+  }
+
+  // Auto-load preference
+  if (state.elements.chkAutoload) {
+    // Load saved preference
+    const savedAutoload = localStorage.getItem('ytxt-autoload');
+    if (savedAutoload === 'true') {
+      state.elements.chkAutoload.checked = true;
+    }
+
+    // Save preference on change
+    state.elements.chkAutoload.addEventListener('change', (e) => {
+      localStorage.setItem('ytxt-autoload', e.target.checked);
+    });
+  }
+
+  // Clickable timestamps to seek video
+  if (state.elements.output) {
+    state.elements.output.addEventListener('click', (e) => {
+      const textarea = e.target;
+      const cursorPos = textarea.selectionStart;
+      const text = textarea.value;
+
+      // Find the line containing the cursor
+      const lineStart = text.lastIndexOf('\n', cursorPos - 1) + 1;
+      const lineEnd = text.indexOf('\n', cursorPos);
+      const line = text.substring(lineStart, lineEnd === -1 ? text.length : lineEnd);
+
+      // Match timestamp format [HH:MM:SS] or [MM:SS]
+      const timestampMatch = line.match(/^\[(\d{1,2}):(\d{2}):(\d{2})\]/);
+      if (timestampMatch) {
+        const hours = parseInt(timestampMatch[1], 10);
+        const minutes = parseInt(timestampMatch[2], 10);
+        const seconds = parseInt(timestampMatch[3], 10);
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
+        // Seek the video
+        const video = document.querySelector('video');
+        if (video) {
+          video.currentTime = totalSeconds;
+          if (video.paused) video.play();
+        }
+      }
+    });
+  }
 
   updateTrackSelect(state.tracks);
   return container;
