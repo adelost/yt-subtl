@@ -2,6 +2,7 @@
 
 import { state, updateTrackSelect } from './state.js';
 import { handleFetch, handleCopy, handleCopyPlain, handleDownload, handleToggleCollapse } from './actions.js';
+import { attachPanel, startObserving, stopObserving, resetPlacement } from '../lib/placement.js';
 
 const PANEL_ID = 'ytxt-panel';
 
@@ -108,13 +109,9 @@ export const createPanel = () => {
 
   setTrustedHTML(container, panelHTML);
 
-  const sidebar = document.getElementById('secondary') || document.querySelector('#secondary');
-  if (sidebar) {
-    sidebar.prepend(container);
-  } else {
-    container.classList.add('ytxt-floating');
-    document.body.appendChild(container);
-  }
+  // Use placement manager for responsive positioning
+  attachPanel(container);
+  startObserving(container);
 
   // Cache elements
   state.elements = {
@@ -230,6 +227,10 @@ export const createPanel = () => {
 };
 
 export const destroyPanel = () => {
+  stopObserving();
   const el = document.getElementById(PANEL_ID);
   if (el?.parentNode) el.parentNode.removeChild(el);
 };
+
+// Export resetPlacement for use in navigation
+export { resetPlacement };

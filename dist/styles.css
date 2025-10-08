@@ -45,7 +45,19 @@
   transform: rotate(180deg);
 }
 
+/* Placement modes */
+.ytxt-mode-sidebar {
+  /* Natural sidebar placement - no special positioning needed */
+}
+
+.ytxt-mode-inline {
+  /* Full-width inline placement below player/title */
+  width: 100%;
+  margin-bottom: 24px;
+}
+
 .ytxt-floating {
+  /* Fallback floating mode for edge cases */
   position: fixed;
   right: 16px;
   bottom: 16px;

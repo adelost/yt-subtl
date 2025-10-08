@@ -3,7 +3,7 @@
 import { extractCaptionTracks } from './lib/youtube.js';
 import { injectObserver, onHarvestEvent } from './lib/harvest.js';
 import { state, updateTrackSelect } from './ui/state.js';
-import { createPanel, destroyPanel } from './ui/panel.js';
+import { createPanel, destroyPanel, resetPlacement } from './ui/panel.js';
 import { handleCopy, handleFetch } from './ui/actions.js';
 
 // --- Lifecycle ----------------------------------------------------------
@@ -30,6 +30,7 @@ const onNavigate = () => {
   state.elements = null;
 
   destroyPanel();
+  resetPlacement();
   createPanel();
   updateCaptions();
 };
@@ -51,16 +52,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Mutation observer to handle late sidebar rendering
-const mo = new MutationObserver(() => {
-  const panel = document.getElementById('ytxt-panel');
-  const sidebar = document.querySelector('#secondary');
-  if (panel?.classList.contains('ytxt-floating') && sidebar) {
-    panel.classList.remove('ytxt-floating');
-    sidebar.prepend(panel);
-  }
-});
-mo.observe(document.documentElement, { childList: true, subtree: true });
+// PlacementManager now handles layout changes automatically via its observers
 
 // Initial mount
 createPanel();
