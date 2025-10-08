@@ -94,6 +94,35 @@ export const handleCopy = async () => {
   }
 };
 
+export const handleCopyPlain = async () => {
+  try {
+    if (!state.elements) return;
+
+    const text = state.elements.output.value || '';
+    if (!text) {
+      setStatus('Nothing to copy', 'warn');
+      return;
+    }
+
+    // Remove timestamps: lines starting with [00:00:00] or similar
+    const plainText = text
+      .split('\n')
+      .map(line => line.replace(/^\[\d{1,2}:\d{2}:\d{2}\]\s*/, ''))
+      .join('\n');
+
+    await navigator.clipboard.writeText(plainText);
+    setStatus('✓ Copied without timestamps', 'ok');
+
+    // Visual feedback
+    const btn = state.elements.container.querySelector('[data-action="copy-plain"]');
+    btn?.classList.add('ytxt-success');
+    setTimeout(() => btn?.classList.remove('ytxt-success'), 1000);
+  } catch (err) {
+    console.error(err);
+    setStatus('Copy failed. Use Ctrl/Cmd+C', 'warn');
+  }
+};
+
 export const handleDownload = () => {
   if (!state.elements) return;
 

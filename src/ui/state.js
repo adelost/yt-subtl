@@ -22,9 +22,10 @@ export const setLoading = (isLoading) => {
   state.isLoading = isLoading;
   if (!state.elements) return;
 
-  const { btnGet, spinner, btnText, sel } = state.elements;
+  const { btnGet, spinner, btnText, sel, chkTS } = state.elements;
   btnGet.disabled = isLoading;
   sel.disabled = isLoading;
+  chkTS.disabled = isLoading;
   spinner.style.display = isLoading ? 'inline-block' : 'none';
   btnText.style.display = isLoading ? 'none' : 'inline';
   btnGet.classList.toggle('ytxt-loading', isLoading);

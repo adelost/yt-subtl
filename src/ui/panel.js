@@ -1,7 +1,7 @@
 // UI panel creation and rendering
 
 import { state, updateTrackSelect } from './state.js';
-import { handleFetch, handleCopy, handleDownload, handleToggleCollapse } from './actions.js';
+import { handleFetch, handleCopy, handleCopyPlain, handleDownload, handleToggleCollapse } from './actions.js';
 
 const PANEL_ID = 'ytxt-panel';
 
@@ -42,6 +42,12 @@ export const createPanel = () => {
         <button class="ytxt-btn ytxt-icon-btn" data-action="copy" title="Copy to clipboard (Ctrl+Shift+C)" aria-label="Copy">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M4 2a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V2zm2-1a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1V2a1 1 0 00-1-1H6zM2 5a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1v-1h1v1a2 2 0 01-2 2H2a2 2 0 01-2-2V6a2 2 0 012-2h1v1H2z"/>
+          </svg>
+        </button>
+        <button class="ytxt-btn ytxt-icon-btn" data-action="copy-plain" title="Copy without timestamps" aria-label="Copy plain text">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M13 1H3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V3a2 2 0 00-2-2zM3 13V3h10v10H3z"/>
+            <path d="M4 6h8v1H4zM4 8h8v1H4zM4 10h5v1H4z"/>
           </svg>
         </button>
         <button class="ytxt-btn ytxt-icon-btn" data-action="download" title="Download as .txt" aria-label="Download">
@@ -124,6 +130,8 @@ export const createPanel = () => {
       await handleFetch();
     } else if (action === 'copy') {
       await handleCopy();
+    } else if (action === 'copy-plain') {
+      await handleCopyPlain();
     } else if (action === 'download') {
       handleDownload();
     } else if (action === 'toggle-collapse') {
