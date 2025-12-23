@@ -133,62 +133,76 @@ export const awaitTemplateForTrack = async (videoId, track, timeoutMs = 2500) =>
   return result;
 };
 
-// Injection helper to install page-context observer
+// Since we run in MAIN world, we can install the observer directly (no script injection needed)
 export const injectObserver = () => {
   try {
-    if (window.__ytxtObserverInjected) return;
-    window.__ytxtObserverInjected = true;
-    const s = document.createElement('script');
-    s.type = 'text/javascript';
-    s.textContent = `(() => { try {
-      if (window.__ytxtObserverInstalled) return; window.__ytxtObserverInstalled = true;
-      const toURL = (u) => { try { return new URL(u, location.origin); } catch { return null; } };
-      const post = (d) => { try { window.dispatchEvent(new CustomEvent('ytxt:transcript-template', { detail: d })); } catch {} };
-      const harvest = async (reqUrl, res, reqBody, headers) => {
-        try {
-          const u = toURL(String(reqUrl||'')); if (!u) return;
-          const path = u.pathname || '';
-          const isTT = path.includes('/api/timedtext');
-          const isYTI = path.includes('/youtubei/') && path.includes('/get_transcript');
-          if (!isTT && !isYTI) return;
-          const clone = (res && res.clone) ? res.clone() : res;
-          if (!clone || !clone.text) return;
-          const text = await clone.text();
-          if (!text || text.length === 0) return;
-          const ct = (res && res.headers && res.headers.get && res.headers.get('content-type')) || '';
-          const params = {}; if (u && u.searchParams) { u.searchParams.forEach((v,k)=>{params[k]=v}) }
-          const vid = params.v || null;
-          if (isTT) {
-            post({ kind:'timedtext', url: u.toString(), params, videoId: vid, contentType: ct, size: text.length, body: text });
-          } else if (isYTI) {
-            let reqParams = null;
-            if (reqBody && typeof reqBody === 'string') {
-              try { const j = JSON.parse(reqBody); if (j && j.params) reqParams = j.params; } catch {}
-            }
-            post({ kind:'youtubei', url: u.toString(), videoId: vid, contentType: ct, size: text.length, body: text, reqParams });
+    if (window.__ytxtObserverInstalled) return;
+    window.__ytxtObserverInstalled = true;
+
+    const toURL = (u) => { try { return new URL(u, location.origin); } catch { return null; } };
+    const post = (d) => { try { window.dispatchEvent(new CustomEvent('ytxt:transcript-template', { detail: d })); } catch {} };
+
+    const harvest = async (reqUrl, res, reqBody) => {
+      try {
+        const u = toURL(String(reqUrl || '')); if (!u) return;
+        const path = u.pathname || '';
+        const isTT = path.includes('/api/timedtext');
+        const isYTI = path.includes('/youtubei/') && path.includes('/get_transcript');
+        if (!isTT && !isYTI) return;
+        const clone = (res && res.clone) ? res.clone() : res;
+        if (!clone || !clone.text) return;
+        const text = await clone.text();
+        if (!text || text.length === 0) return;
+        const ct = (res && res.headers && res.headers.get && res.headers.get('content-type')) || '';
+        const params = {}; if (u && u.searchParams) { u.searchParams.forEach((v, k) => { params[k] = v }); }
+        const vid = params.v || null;
+        if (isTT) {
+          post({ kind: 'timedtext', url: u.toString(), params, videoId: vid, contentType: ct, size: text.length, body: text });
+        } else if (isYTI) {
+          let reqParams = null;
+          if (reqBody && typeof reqBody === 'string') {
+            try { const j = JSON.parse(reqBody); if (j && j.params) reqParams = j.params; } catch {}
           }
-        } catch {}
-      };
-      const of = window.fetch.bind(window);
-      window.fetch = function(input, init) {
-        let body = init && init.body ? init.body : null;
-        if (body && typeof body !== 'string') {
-          try { body = JSON.stringify(body); } catch {}
+          post({ kind: 'youtubei', url: u.toString(), videoId: vid, contentType: ct, size: text.length, body: text, reqParams });
         }
-        const p = of(input, init);
-        p.then(res => { try { harvest(input, res, body, (init && init.headers) || {}); } catch {} });
-        return p;
-      };
-      const xo = XMLHttpRequest.prototype.open; const xs = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function(m,u,...r){ this.__ytxt = { m, u }; return xo.call(this,m,u,...r) };
-      XMLHttpRequest.prototype.send = function(b){ const that=this; this.addEventListener('load', function(){ try{
-        const info = that.__ytxt||{}; const url=info.u||''; const res={ headers: { get: (k)=> that.getResponseHeader(k) } };
-        const fakeRes = { clone: ()=>({ text: async()=> (typeof that.responseText==='string'?that.responseText:'') }), headers: { get: (k)=> that.getResponseHeader(k) } };
-        const reqBody = (typeof b==='string')? b : null; harvest(url, fakeRes, reqBody, {});
-      }catch{} }); return xs.call(this,b) };
-    } catch(e) {} })();`;
-    (document.head || document.documentElement).appendChild(s);
-    setTimeout(() => s.remove(), 0);
+      } catch {}
+    };
+
+    // Intercept fetch
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = function(input, init) {
+      let body = init && init.body ? init.body : null;
+      if (body && typeof body !== 'string') {
+        try { body = JSON.stringify(body); } catch {}
+      }
+      const p = originalFetch(input, init);
+      p.then(res => { try { harvest(input, res, body); } catch {} });
+      return p;
+    };
+
+    // Intercept XMLHttpRequest
+    const xhrOpen = XMLHttpRequest.prototype.open;
+    const xhrSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(m, u, ...r) {
+      this.__ytxt = { m, u };
+      return xhrOpen.call(this, m, u, ...r);
+    };
+    XMLHttpRequest.prototype.send = function(b) {
+      const that = this;
+      this.addEventListener('load', function() {
+        try {
+          const info = that.__ytxt || {};
+          const url = info.u || '';
+          const fakeRes = {
+            clone: () => ({ text: async () => (typeof that.responseText === 'string' ? that.responseText : '') }),
+            headers: { get: (k) => that.getResponseHeader(k) }
+          };
+          const reqBody = (typeof b === 'string') ? b : null;
+          harvest(url, fakeRes, reqBody);
+        } catch {}
+      });
+      return xhrSend.call(this, b);
+    };
   } catch {}
 };
 

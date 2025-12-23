@@ -1,5 +1,5 @@
 import { awaitTemplateForTrack } from '../../lib/harvest.js';
-import { fetchYTTranscript } from '../../lib/utils.js';
+import { fetchYTTranscript } from '../../lib/api.js';
 import { parseYouTubeITranscript } from '../../lib/parsers.js';
 import { reportStatus } from '../../shared/status-bus.js';
 

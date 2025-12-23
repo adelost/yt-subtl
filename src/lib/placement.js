@@ -1,12 +1,12 @@
 // Responsive panel placement manager
 
-const SIDEBAR_MIN_WIDTH = 1100;
 const DEBOUNCE_MS = 150;
 
 let currentMode = null;
 let resizeObserver = null;
 let mutationObserver = null;
 let debounceTimer = null;
+let resizeHandler = null;
 
 // Debounce helper
 const debounce = (fn, ms) => {
@@ -16,56 +16,61 @@ const debounce = (fn, ms) => {
   };
 };
 
+// Detect if we're on a Shorts page
+export const isShorts = () => {
+  return location.pathname.startsWith('/shorts/') ||
+         !!document.querySelector('ytd-shorts');
+};
+
 // Detect if sidebar is visible
 const isSidebarVisible = () => {
   const sidebar = document.querySelector('#secondary');
   if (!sidebar) return false;
-
-  // Check if actually visible (not display:none, has offsetParent)
   if (sidebar.offsetParent === null) return false;
-
   const rect = sidebar.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
 };
 
 // Detect best placement mode
 const detectMode = () => {
-  const width = window.innerWidth;
+  // Shorts: always use FAB mode
+  if (isShorts()) return 'fab';
 
-  // Check for theater mode
+  // Check for theater mode (sidebar hidden)
   const flexy = document.querySelector('ytd-watch-flexy');
   const isTheater = flexy?.hasAttribute('theater') || flexy?.getAttribute('theater') === '';
-
-  // Theater mode: prefer Inline for full-width focus
   if (isTheater) return 'inline';
 
-  // Check sidebar visibility and width
-  if (isSidebarVisible() && width >= SIDEBAR_MIN_WIDTH) {
-    return 'sidebar';
-  }
+  // Prefer sidebar when available
+  if (isSidebarVisible()) return 'sidebar';
 
-  // Default to inline for everything else
+  // Fallback to inline
   return 'inline';
 };
 
-// Find inline insertion point (below player/title, before description)
+// Find inline insertion point
 const getInlineTarget = () => {
-  // Try primary-inner (contains player, title, description)
   const primaryInner = document.querySelector('#primary #primary-inner');
   if (primaryInner) {
-    // Insert after title/info, before description
     const below = primaryInner.querySelector('#below');
     if (below) return { parent: primaryInner, before: below };
-
-    // Fallback: just append to primary-inner
     return { parent: primaryInner, before: null };
   }
 
-  // Fallback: use primary
   const primary = document.querySelector('#primary');
   if (primary) return { parent: primary, before: null };
 
   return null;
+};
+
+// Find Shorts container for FAB placement
+const getShortsContainer = () => {
+  // Try to find the shorts container
+  const shortsContainer = document.querySelector('ytd-shorts');
+  if (shortsContainer) return shortsContainer;
+
+  // Fallback to body
+  return document.body;
 };
 
 // Attach panel to the appropriate location
@@ -77,53 +82,47 @@ export const attachPanel = (panel) => {
   // Already in correct mode and attached
   if (currentMode === mode && panel.parentNode) return;
 
-  // Remove old mode class
-  if (currentMode) {
-    panel.classList.remove(`ytxt-mode-${currentMode}`);
-  }
+  // Remove old mode classes
+  panel.classList.remove('ytxt-mode-sidebar', 'ytxt-mode-inline', 'ytxt-floating', 'ytxt-mode-fab');
 
   // Detach from current location
   if (panel.parentNode) {
     panel.parentNode.removeChild(panel);
   }
 
-  // Attach to new location
+  currentMode = mode;
+
+  // FAB mode for Shorts
+  if (mode === 'fab') {
+    const container = getShortsContainer();
+    container.appendChild(panel);
+    panel.classList.add('ytxt-mode-fab');
+    return;
+  }
+
+  // Sidebar mode
   if (mode === 'sidebar') {
     const sidebar = document.querySelector('#secondary');
     if (sidebar) {
       sidebar.prepend(panel);
       panel.classList.add('ytxt-mode-sidebar');
-      currentMode = 'sidebar';
-    } else {
-      // Fallback to inline if sidebar disappeared
-      const target = getInlineTarget();
-      if (target) {
-        if (target.before) {
-          target.parent.insertBefore(panel, target.before);
-        } else {
-          target.parent.appendChild(panel);
-        }
-        panel.classList.add('ytxt-mode-inline');
-        currentMode = 'inline';
-      }
+      return;
     }
+  }
+
+  // Inline mode (default)
+  const target = getInlineTarget();
+  if (target) {
+    if (target.before) {
+      target.parent.insertBefore(panel, target.before);
+    } else {
+      target.parent.appendChild(panel);
+    }
+    panel.classList.add('ytxt-mode-inline');
   } else {
-    // Inline mode
-    const target = getInlineTarget();
-    if (target) {
-      if (target.before) {
-        target.parent.insertBefore(panel, target.before);
-      } else {
-        target.parent.appendChild(panel);
-      }
-      panel.classList.add('ytxt-mode-inline');
-      currentMode = 'inline';
-    } else {
-      // Last resort: floating
-      document.body.appendChild(panel);
-      panel.classList.add('ytxt-floating');
-      currentMode = 'floating';
-    }
+    // Last resort: floating
+    document.body.appendChild(panel);
+    panel.classList.add('ytxt-floating');
   }
 };
 
@@ -131,19 +130,22 @@ export const attachPanel = (panel) => {
 export const startObserving = (panel) => {
   if (!panel) return;
 
-  const debouncedReattach = debounce(() => attachPanel(panel), DEBOUNCE_MS);
+  resizeHandler = debounce(() => attachPanel(panel), DEBOUNCE_MS);
 
-  // Observe viewport resize
-  resizeObserver = new ResizeObserver(debouncedReattach);
+  resizeObserver = new ResizeObserver(resizeHandler);
 
-  // Watch the watch-flexy container for theater mode changes
   const flexy = document.querySelector('ytd-watch-flexy');
   if (flexy) {
     resizeObserver.observe(flexy);
   }
 
-  // Watch for sidebar visibility changes
-  mutationObserver = new MutationObserver(debouncedReattach);
+  // Also observe shorts container
+  const shorts = document.querySelector('ytd-shorts');
+  if (shorts) {
+    resizeObserver.observe(shorts);
+  }
+
+  mutationObserver = new MutationObserver(resizeHandler);
 
   const columns = document.querySelector('#columns');
   if (columns) {
@@ -155,7 +157,6 @@ export const startObserving = (panel) => {
     });
   }
 
-  // Also watch document for theater attribute changes
   if (flexy) {
     mutationObserver.observe(flexy, {
       attributes: true,
@@ -163,8 +164,7 @@ export const startObserving = (panel) => {
     });
   }
 
-  // Watch for window resize
-  window.addEventListener('resize', debouncedReattach);
+  window.addEventListener('resize', resizeHandler);
 };
 
 // Stop observing
@@ -179,11 +179,16 @@ export const stopObserving = () => {
     mutationObserver = null;
   }
 
+  if (resizeHandler) {
+    window.removeEventListener('resize', resizeHandler);
+    resizeHandler = null;
+  }
+
   clearTimeout(debounceTimer);
   currentMode = null;
 };
 
-// Reset placement (useful on navigation)
+// Reset placement
 export const resetPlacement = () => {
   currentMode = null;
 };

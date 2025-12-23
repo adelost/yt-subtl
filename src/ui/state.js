@@ -1,74 +1,115 @@
-// State management
+/**
+ * UI State - Reactive stores for transcript panel
+ */
 
+import { writable, persisted, derived } from '../lib/store.js';
 import { pickBestTrack } from '../lib/youtube.js';
+import { isShorts } from '../lib/placement.js';
 
-export const state = {
-  tracks: [],
-  videoId: null,
-  elements: null,
-  isLoading: false,
-  isCollapsed: false,
-  debug: { via: '', meta: null }
-};
+// Core state
+export const tracks = writable([]);
+export const videoId = writable(null);
+export const selectedTrack = writable(0);
+export const transcript = writable('');
+export const loading = writable(false);
+export const collapsed = writable(false);
+export const drawerOpen = writable(false);
+export const search = writable('');
+export const status = writable('');
+export const statusType = writable('');
+export const activeChipTime = writable(-1);
 
-export const setStatus = (msg, kind = '') => {
-  if (!state.elements) return;
-  const { status } = state.elements;
-  status.textContent = msg || '';
-  status.className = 'ytxt-footnote ' + (kind ? `ytxt-${kind}` : '');
-};
+// Persisted state
+export const view = persisted('ytxt-view', 'text');
+export const includeTimestamps = persisted('ytxt-timestamps', true);
+export const autoload = persisted('ytxt-autoload', false);
 
-export const setLoading = (isLoading) => {
-  state.isLoading = isLoading;
-  if (!state.elements) return;
+// Derived state
+export const hasTracks = derived(tracks, (t) => t.length > 0);
 
-  const { btnGet, spinner, btnText, sel, chkTS } = state.elements;
-  btnGet.disabled = isLoading;
-  sel.disabled = isLoading;
-  chkTS.disabled = isLoading;
-  spinner.style.display = isLoading ? 'inline-block' : 'none';
-  btnText.style.display = isLoading ? 'none' : 'inline';
-  btnGet.classList.toggle('ytxt-loading', isLoading);
-};
+export const lines = derived(transcript, (t) =>
+  t ? t.split('\n').filter((l) => l.trim()) : []
+);
 
-export const updateStats = (text) => {
-  if (!state.elements) return;
-  const lines = text.split('\n').length;
-  const words = text.split(/\s+/).filter(Boolean).length;
-  const chars = text.length;
-  state.elements.stats.textContent = `${lines} lines · ${words} words · ${chars.toLocaleString()} chars`;
-};
+export const filteredLines = derived([lines, search], ([l, s]) =>
+  s ? l.filter((line) => line.toLowerCase().includes(s.toLowerCase())) : l
+);
 
-export const updateTrackSelect = (tracks) => {
-  if (!state.elements) return;
-  const { sel, btnGet } = state.elements;
+export const matchCount = derived([search, filteredLines], ([s, f]) =>
+  s ? f.length : 0
+);
 
-  // Clear all options using DOM methods (TrustedHTML-safe)
-  while (sel.firstChild) {
-    sel.removeChild(sel.firstChild);
+export const stats = derived([transcript, lines], ([t, l]) =>
+  t ? `${l.length} lines · ${t.split(/\s+/).filter(Boolean).length} words` : ''
+);
+
+// Helpers
+export const isShortsMode = () => isShorts();
+
+export function setStatus(msg, type = '') {
+  status.set(msg);
+  statusType.set(type);
+}
+
+export function selectBestTrack() {
+  const $tracks = tracks.get();
+  if (!$tracks.length) return;
+
+  const best = pickBestTrack($tracks);
+  const idx = $tracks.indexOf(best);
+  if (idx >= 0) selectedTrack.set(idx);
+}
+
+export function trackLabel(track, i) {
+  const name = track.name?.simpleText || track.languageCode || `Track ${i + 1}`;
+  return track.kind === 'asr' ? `${name} (auto)` : name;
+}
+
+export function clearSearch() {
+  search.set('');
+}
+
+export function setView(v) {
+  view.set(v);
+}
+
+export function setAutoload(value) {
+  autoload.set(value);
+}
+
+// Update function for external use (called from content-script)
+export function updateTracks(newTracks, newVideoId) {
+  tracks.set(newTracks || []);
+  videoId.set(newVideoId);
+  transcript.set('');
+  status.set('');
+  statusType.set('');
+  activeChipTime.set(-1);
+  search.set('');
+
+  if (newTracks?.length) {
+    selectBestTrack();
+
+    if (autoload.get()) {
+      // Import dynamically to avoid circular dependency
+      import('./actions.js').then(({ doFetch }) => {
+        setTimeout(() => doFetch(), 500);
+      });
+    }
   }
+}
 
-  if (!tracks?.length) {
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'No captions available';
-    sel.appendChild(opt);
-    sel.disabled = true;
-    btnGet.disabled = true;
-    return;
-  }
-
-  sel.disabled = false;
-  btnGet.disabled = false;
-  const best = pickBestTrack(tracks);
-
-  tracks.forEach((t, i) => {
-    const opt = document.createElement('option');
-    opt.value = String(i);
-    opt.textContent = (t.name?.simpleText || t.languageCode || `Track ${i + 1}`) +
-                      (t.kind === 'asr' ? ' (auto)' : '') +
-                      (t.languageCode ? ` [${t.languageCode}]` : '');
-    opt.selected = t === best;
-    sel.appendChild(opt);
-  });
-};
+// Reset state
+export function resetState() {
+  tracks.set([]);
+  videoId.set(null);
+  selectedTrack.set(0);
+  transcript.set('');
+  loading.set(false);
+  collapsed.set(false);
+  drawerOpen.set(false);
+  search.set('');
+  status.set('');
+  statusType.set('');
+  activeChipTime.set(-1);
+}

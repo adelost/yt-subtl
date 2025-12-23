@@ -1,13 +1,6 @@
-// Generic utility functions
-
-export const msToTimestamp = (ms) => {
-  const totalSec = Math.floor(Math.max(0, Number(ms) || 0) / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return (h > 0 ? String(h).padStart(2, '0') + ':' : '') +
-         String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-};
+/**
+ * API/fetch utilities
+ */
 
 export const fetchCaption = async (url) => {
   // Fetch directly from MAIN world - we have access to YouTube's cookies here

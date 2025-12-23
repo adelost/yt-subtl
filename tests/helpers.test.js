@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { msToTimestamp } from '../src/lib/utils.js';
+import { msToTimestamp } from '../src/lib/helpers.js';
 
 describe('msToTimestamp', () => {
   it('should convert milliseconds to HH:MM:SS format', () => {

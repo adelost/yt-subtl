@@ -1,6 +1,6 @@
 // Transcript format parsers
 
-import { msToTimestamp } from './utils.js';
+import { msToTimestamp } from './helpers.js';
 
 export const json3ToText = (json, withTS) => {
   if (!json?.events) return '';
@@ -68,7 +68,13 @@ export const xmlToText = (xmlString, withTS) => {
 };
 
 export const parseTranscript = (body, contentType, withTS) => {
-  if (contentType.includes('json')) return json3ToText(JSON.parse(body), withTS);
+  if (contentType.includes('json')) {
+    try {
+      return json3ToText(JSON.parse(body), withTS);
+    } catch {
+      return '';
+    }
+  }
   if (contentType.includes('xml')) return xmlToText(body, withTS);
   return vttToText(body, withTS);
 };

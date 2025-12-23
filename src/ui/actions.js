@@ -1,152 +1,84 @@
-// Event handlers and actions
+/**
+ * UI Actions - Business logic for transcript panel
+ */
 
-import { state, setStatus, setLoading, updateStats } from './state.js';
-// Live status updates from fetcher (MAIN world)
-window.addEventListener('ytxt:status', (e) => {
-  try {
-    const msg = e?.detail || '';
-    if (!msg) return;
-    if (!state.elements) return;
-    setStatus(String(msg));
-  } catch {}
-});
-
-// Capture debug meta and show in the panel's Debug section
-window.addEventListener('ytxt:debug', (e) => {
-  try {
-    const info = e?.detail || {};
-    state.debug = { via: info.via || '', meta: info.meta || null };
-    const pre = state.elements?.container?.querySelector('#ytxt-debug-pre');
-    if (pre) {
-      const meta = info.meta || {};
-      const safe = { via: info.via || '', meta: { ...meta, url: meta.url ? String(meta.url).slice(0, 220) : undefined } };
-      pre.textContent = JSON.stringify(safe, null, 2);
-    }
-  } catch {}
-});
 import { fetchTranscript } from '../core/engine.js';
+import { copyToClipboard, downloadText } from '../lib/helpers.js';
+import {
+  tracks,
+  videoId,
+  selectedTrack,
+  transcript,
+  loading,
+  collapsed,
+  includeTimestamps,
+  filteredLines,
+  setStatus,
+} from './state.js';
 
-export const handleFetch = async () => {
+export async function doFetch() {
+  const $tracks = tracks.get();
+  const $selectedTrack = selectedTrack.get();
+  const $loading = loading.get();
+  const $videoId = videoId.get();
+  const $includeTimestamps = includeTimestamps.get();
+
+  if (!$tracks.length || $loading) return;
+
+  const track = $tracks[$selectedTrack];
+  if (!track) return;
+
+  loading.set(true);
+  setStatus('Fetching...');
+
   try {
-    if (!state.elements) return;
-
-    if (!state.tracks?.length) {
-      setStatus('No captions found for this video.', 'warn');
-      return;
-    }
-
-    const idx = parseInt(state.elements.sel.value, 10);
-    if (Number.isNaN(idx) || !state.tracks[idx]) {
-      setStatus('Please select a caption track.', 'warn');
-      return;
-    }
-
-    const track = state.tracks[idx];
-    setLoading(true);
-    setStatus('Fetching transcript...');
-
-    const text = await fetchTranscript(track, state.videoId, state.elements.chkTS.checked);
-
-    // Reveal output only after successful fetch
-    if (state.elements.outputWrapper) state.elements.outputWrapper.style.display = '';
-    state.elements.output.value = text;
-    updateStats(text);
-    setStatus(`Loaded from ${track.languageCode}${track.kind === 'asr' ? ' (auto)' : ''}`, 'ok');
-
-    // Add success animation
-    state.elements.output.classList.add('ytxt-success-flash');
-    setTimeout(() => state.elements.output?.classList.remove('ytxt-success-flash'), 600);
-    // Uncollapse if collapsed
-    if (state.isCollapsed) {
-      state.isCollapsed = false;
-      state.elements.container.classList.toggle('ytxt-collapsed', false);
-    }
+    const result = await fetchTranscript(track, $videoId, $includeTimestamps);
+    transcript.set(result);
+    collapsed.set(false);
+    const label = track.languageCode + (track.kind === 'asr' ? ' (auto)' : '');
+    setStatus(`Loaded: ${label}`, 'ok');
   } catch (err) {
-    console.error(err);
-    // Show detailed error message in UI
-    const errorMsg = err.message || 'Unknown error';
-    setStatus(errorMsg, 'error');
-    // Keep output hidden on error for a minimal UI
+    setStatus(err.message || 'Failed to load', 'error');
   } finally {
-    setLoading(false);
+    loading.set(false);
   }
-};
+}
 
-export const handleCopy = async () => {
-  try {
-    if (!state.elements) return;
-
-    const text = state.elements.output.value || '';
-    if (!text) {
-      setStatus('Nothing to copy', 'warn');
-      return;
-    }
-    await navigator.clipboard.writeText(text);
-    setStatus('✓ Copied to clipboard', 'ok');
-
-    // Visual feedback
-    const btn = state.elements.container.querySelector('[data-action="copy"]');
-    btn?.classList.add('ytxt-success');
-    setTimeout(() => btn?.classList.remove('ytxt-success'), 1000);
-  } catch (err) {
-    console.error(err);
-    setStatus('Copy failed. Use Ctrl/Cmd+C', 'warn');
+export async function copy() {
+  const $transcript = transcript.get();
+  if (!$transcript) {
+    setStatus('Nothing to copy', 'warn');
+    return;
   }
-};
 
-export const handleCopyPlain = async () => {
-  try {
-    if (!state.elements) return;
+  const ok = await copyToClipboard($transcript);
+  setStatus(ok ? '✓ Copied' : 'Copy failed', ok ? 'ok' : 'error');
+}
 
-    const text = state.elements.output.value || '';
-    if (!text) {
-      setStatus('Nothing to copy', 'warn');
-      return;
-    }
-
-    // Remove timestamps: lines starting with [00:00:00] or similar
-    const plainText = text
-      .split('\n')
-      .map(line => line.replace(/^\[\d{1,2}:\d{2}:\d{2}\]\s*/, ''))
-      .join('\n');
-
-    await navigator.clipboard.writeText(plainText);
-    setStatus('✓ Copied without timestamps', 'ok');
-
-    // Visual feedback
-    const btn = state.elements.container.querySelector('[data-action="copy-plain"]');
-    btn?.classList.add('ytxt-success');
-    setTimeout(() => btn?.classList.remove('ytxt-success'), 1000);
-  } catch (err) {
-    console.error(err);
-    setStatus('Copy failed. Use Ctrl/Cmd+C', 'warn');
+export async function copyFiltered() {
+  const lines = filteredLines.get();
+  if (!lines.length) {
+    setStatus('No matches', 'warn');
+    return;
   }
-};
 
-export const handleDownload = () => {
-  if (!state.elements) return;
+  const ok = await copyToClipboard(lines.join('\n'));
+  setStatus(ok ? `✓ Copied ${lines.length} lines` : 'Copy failed', ok ? 'ok' : 'error');
+}
 
-  const text = state.elements.output.value || '';
-  if (!text) {
+export function download() {
+  const $transcript = transcript.get();
+  const $videoId = videoId.get();
+
+  if (!$transcript) {
     setStatus('Nothing to download', 'warn');
     return;
   }
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `youtube-${state.videoId || 'transcript'}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
-  setStatus('✓ Downloaded as .txt', 'ok');
-};
 
-export const handleToggleCollapse = () => {
-  state.isCollapsed = !state.isCollapsed;
-  if (!state.elements) return;
+  downloadText($transcript, `transcript-${$videoId || 'video'}.txt`);
+  setStatus('✓ Downloaded', 'ok');
+}
 
-  state.elements.container.classList.toggle('ytxt-collapsed', state.isCollapsed);
-  const btn = state.elements.container.querySelector('[data-action="toggle-collapse"]');
-  btn.title = state.isCollapsed ? 'Expand panel' : 'Collapse panel';
-  btn.setAttribute('aria-label', state.isCollapsed ? 'Expand' : 'Collapse');
-};
+export function toggleCollapse() {
+  collapsed.update((v) => !v);
+}

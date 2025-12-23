@@ -1,236 +1,586 @@
-// UI panel creation and rendering
+/**
+ * Transcript Panel - Main UI component
+ * CSP-safe vanilla JS implementation (no innerHTML)
+ */
 
-import { state, updateTrackSelect } from './state.js';
-import { handleFetch, handleCopy, handleCopyPlain, handleDownload, handleToggleCollapse } from './actions.js';
-import { attachPanel, startObserving, stopObserving, resetPlacement } from '../lib/placement.js';
+import { el, $, clear, toggle, toggleClass, setAttr, highlightedText } from '../lib/dom.js';
+import { Icon } from './components/Icon.js';
+import { parseTimestamp, getTimestamp, getContent, seekVideo } from '../lib/helpers.js';
+import { subscribeAll } from '../lib/store.js';
+import { doFetch, copy, copyFiltered, download, toggleCollapse } from './actions.js';
+import {
+  tracks,
+  selectedTrack,
+  transcript,
+  loading,
+  collapsed,
+  drawerOpen,
+  view,
+  search,
+  status,
+  statusType,
+  includeTimestamps,
+  autoload,
+  activeChipTime,
+  hasTracks,
+  lines,
+  filteredLines,
+  matchCount,
+  stats,
+  isShortsMode,
+  setView,
+  setAutoload,
+  clearSearch,
+  trackLabel,
+} from './state.js';
 
-const PANEL_ID = 'ytxt-panel';
+// Cache DOM elements
+let elements = {};
+let unsubs = [];
+let videoHandler = null;
 
-// Helper to safely set innerHTML with TrustedHTML support
-const setTrustedHTML = (element, htmlString) => {
-  if (window.trustedTypes && trustedTypes.createPolicy) {
-    const policy = trustedTypes.createPolicy('ytxt-html', {
-      createHTML: (string) => string
-    });
-    element.innerHTML = policy.createHTML(htmlString);
-  } else {
-    element.innerHTML = htmlString;
+// Build the panel structure
+function buildPanel() {
+  const container = el('div', { class: 'ytxt-panel' });
+
+  // Header
+  const header = el('div', { class: 'ytxt-header' }, [
+    el('div', { class: 'ytxt-title' }, [
+      Icon('transcript', 16),
+      el('span', {}, 'Transcript'),
+    ]),
+    el('div', { class: 'ytxt-tools', id: 'ytxt-tools' }),
+  ]);
+
+  // Body
+  const body = el('div', { class: 'ytxt-body', id: 'ytxt-body' }, [
+    // Empty state
+    el('div', { class: 'ytxt-empty', id: 'ytxt-empty' }, 'No captions available'),
+
+    // Controls
+    el('div', { class: 'ytxt-controls', id: 'ytxt-controls' }, [
+      el('div', { class: 'ytxt-row' }, [
+        el('select', { class: 'ytxt-select', id: 'ytxt-select' }),
+        el('button', { class: 'ytxt-btn ytxt-btn-primary', id: 'ytxt-cta' }, [
+          el('span', { class: 'ytxt-cta-text' }, 'Get Transcript'),
+          el('span', { class: 'ytxt-spinner' }),
+        ]),
+      ]),
+    ]),
+
+    // Output wrapper
+    el('div', { class: 'ytxt-output-wrapper', id: 'ytxt-output-wrapper' }, [
+      // Text view
+      el('div', { class: 'ytxt-view-text', id: 'ytxt-view-text' }, [
+        el('textarea', {
+          class: 'ytxt-output',
+          id: 'ytxt-textarea',
+          rows: '14',
+          readonly: true,
+        }),
+        el('div', { class: 'ytxt-results', id: 'ytxt-results' }),
+      ]),
+
+      // Chips view
+      el('div', { class: 'ytxt-view-chips', id: 'ytxt-view-chips' }, [
+        el('div', { class: 'ytxt-chips', id: 'ytxt-chips' }),
+      ]),
+
+      // Toolbar
+      el('div', { class: 'ytxt-toolbar' }, [
+        el('div', { class: 'ytxt-search-wrapper' }, [
+          Icon('search'),
+          el('input', {
+            type: 'text',
+            class: 'ytxt-search',
+            id: 'ytxt-search',
+            placeholder: 'Search...',
+          }),
+          el('span', { class: 'ytxt-search-count', id: 'ytxt-search-count' }),
+          el('button', {
+            class: 'ytxt-btn',
+            id: 'ytxt-search-clear',
+            data: { icon: '' },
+            title: 'Clear search',
+          }, Icon('clearCircle')),
+        ]),
+        el('div', { class: 'ytxt-view-switcher' }, [
+          el('button', {
+            class: 'ytxt-view-btn',
+            id: 'ytxt-view-text-btn',
+            title: 'Text',
+          }, Icon('text')),
+          el('button', {
+            class: 'ytxt-view-btn',
+            id: 'ytxt-view-chips-btn',
+            title: 'Timeline',
+          }, Icon('chips')),
+        ]),
+        el('div', { class: 'ytxt-actions' }, [
+          el('button', {
+            class: 'ytxt-btn ytxt-btn-solid',
+            id: 'ytxt-copy-filtered',
+            title: 'Copy filtered',
+          }, Icon('filter')),
+          el('button', { class: 'ytxt-btn ytxt-btn-solid', id: 'ytxt-copy' }, [
+            Icon('copy'),
+            ' Copy',
+          ]),
+          el('button', { class: 'ytxt-btn ytxt-btn-solid', id: 'ytxt-download' }, [
+            Icon('download'),
+            ' Save',
+          ]),
+        ]),
+      ]),
+    ]),
+
+    // Footer
+    el('div', { class: 'ytxt-footer', id: 'ytxt-footer' }, [
+      el('div', { class: 'ytxt-status', id: 'ytxt-status' }),
+      el('div', { class: 'ytxt-stats', id: 'ytxt-stats' }),
+    ]),
+  ]);
+
+  // Drawer wrapper for panel
+  const drawer = el('div', { class: 'ytxt-drawer', id: 'ytxt-drawer' }, [header, body]);
+
+  // FAB for shorts
+  const fab = el('button', { class: 'ytxt-fab', id: 'ytxt-fab', title: 'Transcript' }, [
+    Icon('transcript', 20),
+  ]);
+
+  container.appendChild(fab);
+  container.appendChild(drawer);
+
+  return container;
+}
+
+// Build header tools
+function buildHeaderTools(isShorts, hasTracksVal) {
+  const tools = [];
+
+  if (hasTracksVal) {
+    // Timestamps toggle
+    tools.push(
+      el('label', { class: 'ytxt-toggle', title: 'Include timestamps' }, [
+        el('input', { type: 'checkbox', id: 'ytxt-chk-ts' }),
+        Icon('clock'),
+      ])
+    );
+
+    // Autoload toggle
+    tools.push(
+      el('label', { class: 'ytxt-toggle', title: 'Auto-load' }, [
+        el('input', { type: 'checkbox', id: 'ytxt-chk-autoload' }),
+        Icon('autoload'),
+      ])
+    );
   }
-};
 
-export const createPanel = () => {
-  if (document.getElementById(PANEL_ID)) return document.getElementById(PANEL_ID);
+  if (!isShorts) {
+    // Collapse button
+    tools.push(
+      el('button', { class: 'ytxt-btn ytxt-btn-icon', id: 'ytxt-collapse', title: 'Collapse' }, [
+        Icon('chevronDown'),
+      ])
+    );
+  } else {
+    // Close button for shorts
+    tools.push(
+      el('button', { class: 'ytxt-btn ytxt-btn-icon', id: 'ytxt-close', title: 'Close' }, [
+        Icon('close'),
+      ])
+    );
+  }
 
-  const container = document.createElement('div');
-  container.id = PANEL_ID;
-  container.className = 'ytxt-panel';
+  return tools;
+}
 
-  const panelHTML = `
-    <div class="ytxt-header">
-      <div class="ytxt-title">
-        <svg class="ytxt-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h8v2H2v-2z"/>
-        </svg>
-        Transcript
-      </div>
-      <div class="ytxt-tools">
-        <label class="ytxt-toggle" title="Include timestamps">
-          <input type="checkbox" id="ytxt-timestamps" checked />
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5A5.5 5.5 0 118 2.5a5.5 5.5 0 010 11zM8 4v4.5l3 1.5-.6 1.1L6.5 9V4H8z"/>
-          </svg>
-        </label>
-        <label class="ytxt-toggle" title="Auto-load transcript when page loads">
-          <input type="checkbox" id="ytxt-autoload" />
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 3a5 5 0 104.546 2.914.5.5 0 01.908-.417A6 6 0 118 2v1z"/>
-            <path d="M8 4.466V.534a.25.25 0 01.41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 018 4.466z"/>
-          </svg>
-        </label>
-        <button class="ytxt-btn ytxt-icon-btn" data-action="copy" title="Copy to clipboard (Ctrl+Shift+C)" aria-label="Copy">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M4 2a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V2zm2-1a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1V2a1 1 0 00-1-1H6zM2 5a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1v-1h1v1a2 2 0 01-2 2H2a2 2 0 01-2-2V6a2 2 0 012-2h1v1H2z"/>
-          </svg>
-        </button>
-        <button class="ytxt-btn ytxt-icon-btn" data-action="copy-plain" title="Copy without timestamps" aria-label="Copy plain text">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M13 1H3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V3a2 2 0 00-2-2zM3 13V3h10v10H3z"/>
-            <path d="M4 6h8v1H4zM4 8h8v1H4zM4 10h5v1H4z"/>
-          </svg>
-        </button>
-        <button class="ytxt-btn ytxt-icon-btn" data-action="download" title="Download as .txt" aria-label="Download">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 12l-4-4h2.5V3h3v5H12l-4 4zm-6 1h12v2H2v-2z"/>
-          </svg>
-        </button>
-        <button class="ytxt-btn ytxt-icon-btn ytxt-collapse-btn" data-action="toggle-collapse" title="Collapse panel" aria-label="Collapse">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 10l-4-4h8l-4 4z"/>
-          </svg>
-        </button>
-      </div>
-    </div>
+// Render select options
+function renderTrackOptions(tracksArr) {
+  const selectEl = elements.select;
+  if (!selectEl) return;
 
-    <div class="ytxt-body">
-      <div class="ytxt-row">
-        <select id="ytxt-track" class="ytxt-select" title="Select caption track" aria-label="Caption track"></select>
-        <button class="ytxt-cta" data-action="fetch">
-          <span class="ytxt-btn-text">Get Transcript</span>
-          <span class="ytxt-spinner" style="display: none;"></span>
-        </button>
-      </div>
+  clear(selectEl);
+  tracksArr.forEach((track, i) => {
+    const opt = el('option', { value: i }, trackLabel(track, i));
+    selectEl.appendChild(opt);
+  });
+}
 
-      <div class="ytxt-output-wrapper" style="display: none;">
-        <div class="ytxt-search-wrapper">
-          <input type="text" id="ytxt-search" class="ytxt-search" placeholder="Search transcript..." aria-label="Search" />
-          <span class="ytxt-search-count" id="ytxt-search-count"></span>
-        </div>
-        <textarea id="ytxt-output" class="ytxt-output" rows="16" placeholder="Select a track and click 'Get Transcript' to load subtitles..." spellcheck="false" aria-label="Transcript output"></textarea>
-        <div class="ytxt-empty-state" style="display: none;">
-          <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor" opacity="0.3">
-            <path d="M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h8v2H2v-2z"/>
-          </svg>
-          <p>No transcript loaded yet</p>
-        </div>
-      </div>
+// Render text results (search mode)
+function renderResults(linesArr, searchVal) {
+  const container = elements.results;
+  if (!container) return;
 
-      <div class="ytxt-footer">
-        <div class="ytxt-footnote" id="ytxt-status"></div>
-        <div class="ytxt-stats" id="ytxt-stats"></div>
-        <div class="ytxt-debug">
-          <details id="ytxt-debug-details">
-            <summary title="Show debug info">Debug</summary>
-            <pre id="ytxt-debug-pre" class="ytxt-debug-pre" aria-label="Debug info"></pre>
-          </details>
-        </div>
-      </div>
-    </div>
-  `;
+  clear(container);
 
-  setTrustedHTML(container, panelHTML);
+  if (!linesArr.length) {
+    container.appendChild(el('div', { class: 'ytxt-no-results' }, 'No matches'));
+    return;
+  }
 
-  // Use placement manager for responsive positioning
-  attachPanel(container);
-  startObserving(container);
+  for (const line of linesArr) {
+    const btn = el('button', { class: 'ytxt-result-line' });
+    btn.appendChild(highlightedText(line, searchVal));
+    btn.addEventListener('click', () => seekTo(line));
+    container.appendChild(btn);
+  }
+}
 
-  // Cache elements
-  state.elements = {
-    container,
-    sel: container.querySelector('#ytxt-track'),
-    btnGet: container.querySelector('[data-action="fetch"]'),
-    outputWrapper: container.querySelector('.ytxt-output-wrapper'),
-    output: container.querySelector('#ytxt-output'),
-    chkTS: container.querySelector('#ytxt-timestamps'),
-    chkAutoload: container.querySelector('#ytxt-autoload'),
-    searchInput: container.querySelector('#ytxt-search'),
-    searchCount: container.querySelector('#ytxt-search-count'),
-    status: container.querySelector('#ytxt-status'),
-    stats: container.querySelector('#ytxt-stats'),
-    body: container.querySelector('.ytxt-body'),
-    spinner: container.querySelector('.ytxt-spinner'),
-    btnText: container.querySelector('.ytxt-btn-text')
+// Render chips
+function renderChips(linesArr, searchVal, activeTime) {
+  const container = elements.chips;
+  if (!container) return;
+
+  clear(container);
+
+  for (const line of linesArr) {
+    const ts = getTimestamp(line);
+    const content = getContent(line);
+    const seconds = parseTimestamp(line);
+    const isActive = seconds !== null && seconds === activeTime;
+
+    const chip = el('button', { class: 'ytxt-chip' }, [
+      el('span', { class: 'time' }, ts || ''),
+      el('span', { class: 'text' }),
+    ]);
+
+    // Set active state
+    setAttr(chip, 'data-active', isActive);
+
+    // Add highlighted content
+    const textSpan = chip.querySelector('.text');
+    textSpan.appendChild(highlightedText(content, searchVal));
+
+    chip.addEventListener('click', () => seekTo(line));
+    container.appendChild(chip);
+  }
+}
+
+// Seek video
+function seekTo(line) {
+  seekVideo(parseTimestamp(line));
+}
+
+// Seek from textarea click
+function seekFromTextarea(e) {
+  const text = e.target.value;
+  const pos = e.target.selectionStart;
+  const start = text.lastIndexOf('\n', pos - 1) + 1;
+  const end = text.indexOf('\n', pos);
+  const line = text.substring(start, end === -1 ? text.length : end);
+  seekTo(line);
+}
+
+// Setup video sync for chip highlighting
+function setupVideoSync() {
+  const video = document.querySelector('video');
+  if (!video) return;
+
+  videoHandler = () => {
+    if (view.get() !== 'chips') return;
+    const currentTime = video.currentTime;
+    const linesArr = filteredLines.get();
+
+    let newActive = -1;
+    for (const line of linesArr) {
+      const s = parseTimestamp(line);
+      if (s !== null && s <= currentTime && s > newActive) {
+        newActive = s;
+      }
+    }
+
+    if (newActive !== activeChipTime.get()) {
+      activeChipTime.set(newActive);
+      setTimeout(() => {
+        const activeEl = elements.chips?.querySelector('.ytxt-chip[data-active="true"]');
+        if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 0);
+    }
   };
 
-  // Event delegation
-  container.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
+  video.addEventListener('timeupdate', videoHandler);
+}
 
-    const action = btn.dataset.action;
-    if (action === 'fetch') {
-      await handleFetch();
-    } else if (action === 'copy') {
-      await handleCopy();
-    } else if (action === 'copy-plain') {
-      await handleCopyPlain();
-    } else if (action === 'download') {
-      handleDownload();
-    } else if (action === 'toggle-collapse') {
-      handleToggleCollapse();
-    }
-  });
+// Cleanup video sync
+function cleanupVideoSync() {
+  const video = document.querySelector('video');
+  if (video && videoHandler) {
+    video.removeEventListener('timeupdate', videoHandler);
+    videoHandler = null;
+  }
+}
 
-  // Search functionality
-  if (state.elements.searchInput) {
-    state.elements.searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      const text = state.elements.output.value;
+// Bind static events (called once)
+function bindStaticEvents() {
+  const { fab, cta, select, textarea, searchInput, searchClear,
+          viewTextBtn, viewChipsBtn, copyBtn, copyFilteredBtn, downloadBtn } = elements;
 
-      if (!query) {
-        state.elements.searchCount.textContent = '';
-        return;
+  // FAB click (shorts)
+  fab?.addEventListener('click', () => drawerOpen.set(true));
+
+  // Get transcript button
+  cta?.addEventListener('click', doFetch);
+
+  // Track select
+  select?.addEventListener('change', (e) => selectedTrack.set(Number(e.target.value)));
+
+  // Textarea click (seek)
+  textarea?.addEventListener('click', seekFromTextarea);
+
+  // Search input
+  searchInput?.addEventListener('input', (e) => search.set(e.target.value));
+  searchClear?.addEventListener('click', clearSearch);
+
+  // View switcher
+  viewTextBtn?.addEventListener('click', () => setView('text'));
+  viewChipsBtn?.addEventListener('click', () => setView('chips'));
+
+  // Actions
+  copyBtn?.addEventListener('click', copy);
+  copyFilteredBtn?.addEventListener('click', copyFiltered);
+  downloadBtn?.addEventListener('click', download);
+}
+
+// Bind header tool events (called when header is rebuilt)
+function bindHeaderToolEvents() {
+  const { close, collapse, chkTs, chkAutoload } = elements;
+
+  // Close button (shorts)
+  close?.addEventListener('click', () => drawerOpen.set(false));
+
+  // Collapse button
+  collapse?.addEventListener('click', toggleCollapse);
+
+  // Toggles
+  chkTs?.addEventListener('change', (e) => includeTimestamps.set(e.target.checked));
+  chkAutoload?.addEventListener('change', (e) => setAutoload(e.target.checked));
+}
+
+// Subscribe to state changes
+function subscribeToState() {
+  // Tracks changed - rebuild options and header tools
+  unsubs.push(
+    tracks.subscribe((val) => {
+      renderTrackOptions(val);
+      rebuildHeaderTools();
+    })
+  );
+
+  // Has tracks
+  unsubs.push(
+    hasTracks.subscribe((val) => {
+      toggle(elements.empty, !val);
+      toggle(elements.controls, val);
+      toggle(elements.footer, val);
+    })
+  );
+
+  // Loading state
+  unsubs.push(
+    loading.subscribe((val) => {
+      setAttr(elements.cta, 'disabled', val);
+      setAttr(elements.select, 'disabled', val);
+      toggle(elements.spinner, val);
+      toggle(elements.ctaText, !val);
+    })
+  );
+
+  // Collapsed state
+  unsubs.push(
+    collapsed.subscribe((val) => {
+      toggle(elements.body, !val || isShortsMode());
+      if (elements.collapse) {
+        elements.collapse.style.transform = val ? 'rotate(180deg)' : '';
+        elements.collapse.title = val ? 'Expand' : 'Collapse';
       }
+    })
+  );
 
-      // Count matches
-      const lines = text.split('\n');
-      const matches = lines.filter(line => line.toLowerCase().includes(query));
-      state.elements.searchCount.textContent = `${matches.length} match${matches.length !== 1 ? 'es' : ''}`;
+  // Drawer open (shorts)
+  unsubs.push(
+    drawerOpen.subscribe((val) => {
+      toggleClass(elements.drawer, 'ytxt-drawer-open', val);
+      toggle(elements.fab, isShortsMode() && !val);
+      toggle(elements.drawer, !isShortsMode() || val);
+    })
+  );
 
-      // Highlight first match by scrolling to it
-      if (matches.length > 0) {
-        const firstMatchIndex = text.toLowerCase().indexOf(query);
-        if (firstMatchIndex !== -1) {
-          state.elements.output.focus();
-          state.elements.output.setSelectionRange(firstMatchIndex, firstMatchIndex + query.length);
-          state.elements.output.blur();
-        }
+  // Transcript content
+  unsubs.push(
+    transcript.subscribe((val) => {
+      if (elements.textarea) elements.textarea.value = val;
+      toggle(elements.outputWrapper, !!val);
+    })
+  );
+
+  // View mode
+  unsubs.push(
+    view.subscribe((val) => {
+      toggle(elements.viewText, val === 'text');
+      toggle(elements.viewChips, val === 'chips');
+      setAttr(elements.viewTextBtn, 'data-active', val === 'text');
+      setAttr(elements.viewChipsBtn, 'data-active', val === 'chips');
+    })
+  );
+
+  // Search value
+  unsubs.push(
+    search.subscribe((val) => {
+      if (elements.searchInput && elements.searchInput.value !== val) {
+        elements.searchInput.value = val;
       }
-    });
+      toggle(elements.textarea, !val);
+      toggle(elements.results, !!val);
+      toggle(elements.searchClear, !!val);
+      toggle(elements.searchCount, !!val);
+    })
+  );
+
+  // Filtered lines - render results/chips
+  unsubs.push(
+    subscribeAll({ lines: filteredLines, search, activeChipTime }, ({ lines, search, activeChipTime }) => {
+      if (view.get() === 'text' && search) {
+        renderResults(lines, search);
+      }
+      if (view.get() === 'chips') {
+        renderChips(lines, search, activeChipTime);
+      }
+    })
+  );
+
+  // Match count
+  unsubs.push(
+    matchCount.subscribe((val) => {
+      if (elements.searchCount) elements.searchCount.textContent = val;
+      toggle(elements.copyFilteredBtn, val > 0);
+    })
+  );
+
+  // Status
+  unsubs.push(
+    subscribeAll({ status, statusType }, ({ status, statusType }) => {
+      if (elements.status) {
+        elements.status.textContent = status;
+        setAttr(elements.status, 'data-type', statusType || null);
+      }
+    })
+  );
+
+  // Stats
+  unsubs.push(
+    stats.subscribe((val) => {
+      if (elements.stats) elements.stats.textContent = val;
+    })
+  );
+
+  // Include timestamps checkbox
+  unsubs.push(
+    includeTimestamps.subscribe((val) => {
+      if (elements.chkTs) elements.chkTs.checked = val;
+    })
+  );
+
+  // Autoload checkbox
+  unsubs.push(
+    autoload.subscribe((val) => {
+      if (elements.chkAutoload) elements.chkAutoload.checked = val;
+    })
+  );
+
+  // Selected track
+  unsubs.push(
+    selectedTrack.subscribe((val) => {
+      if (elements.select) elements.select.value = val;
+    })
+  );
+}
+
+// Rebuild header tools based on state
+function rebuildHeaderTools() {
+  const tools = elements.tools;
+  if (!tools) return;
+
+  clear(tools);
+  const toolEls = buildHeaderTools(isShortsMode(), hasTracks.get());
+  for (const tool of toolEls) {
+    tools.appendChild(tool);
   }
 
-  // Auto-load preference
-  if (state.elements.chkAutoload) {
-    // Load saved preference
-    const savedAutoload = localStorage.getItem('ytxt-autoload');
-    if (savedAutoload === 'true') {
-      state.elements.chkAutoload.checked = true;
-    }
+  // Re-cache new elements
+  cacheElements(elements.container);
+  bindHeaderToolEvents();
 
-    // Save preference on change
-    state.elements.chkAutoload.addEventListener('change', (e) => {
-      localStorage.setItem('ytxt-autoload', e.target.checked);
-    });
-  }
+  // Sync checkbox states
+  if (elements.chkTs) elements.chkTs.checked = includeTimestamps.get();
+  if (elements.chkAutoload) elements.chkAutoload.checked = autoload.get();
+}
 
-  // Clickable timestamps to seek video
-  if (state.elements.output) {
-    state.elements.output.addEventListener('click', (e) => {
-      const textarea = e.target;
-      const cursorPos = textarea.selectionStart;
-      const text = textarea.value;
+// Cache element references
+function cacheElements(container) {
+  elements = {
+    container,
+    drawer: $('#ytxt-drawer', container),
+    fab: $('#ytxt-fab', container),
+    tools: $('#ytxt-tools', container),
+    body: $('#ytxt-body', container),
+    empty: $('#ytxt-empty', container),
+    controls: $('#ytxt-controls', container),
+    select: $('#ytxt-select', container),
+    cta: $('#ytxt-cta', container),
+    spinner: $('.ytxt-spinner', container),
+    ctaText: $('.ytxt-cta-text', container),
+    outputWrapper: $('#ytxt-output-wrapper', container),
+    viewText: $('#ytxt-view-text', container),
+    viewChips: $('#ytxt-view-chips', container),
+    textarea: $('#ytxt-textarea', container),
+    results: $('#ytxt-results', container),
+    chips: $('#ytxt-chips', container),
+    searchInput: $('#ytxt-search', container),
+    searchCount: $('#ytxt-search-count', container),
+    searchClear: $('#ytxt-search-clear', container),
+    viewTextBtn: $('#ytxt-view-text-btn', container),
+    viewChipsBtn: $('#ytxt-view-chips-btn', container),
+    copyBtn: $('#ytxt-copy', container),
+    copyFilteredBtn: $('#ytxt-copy-filtered', container),
+    downloadBtn: $('#ytxt-download', container),
+    status: $('#ytxt-status', container),
+    stats: $('#ytxt-stats', container),
+    footer: $('#ytxt-footer', container),
+    collapse: $('#ytxt-collapse', container),
+    // collapseIcon removed - rotation applied directly to button
+    close: $('#ytxt-close', container),
+    chkTs: $('#ytxt-chk-ts', container),
+    chkAutoload: $('#ytxt-chk-autoload', container),
+  };
+}
 
-      // Find the line containing the cursor
-      const lineStart = text.lastIndexOf('\n', cursorPos - 1) + 1;
-      const lineEnd = text.indexOf('\n', cursorPos);
-      const line = text.substring(lineStart, lineEnd === -1 ? text.length : lineEnd);
+// Create panel
+export function createPanel() {
+  const container = buildPanel();
+  container.id = 'ytxt-panel';
 
-      // Match timestamp format [HH:MM:SS] or [MM:SS]
-      const timestampMatch = line.match(/^\[(\d{1,2}):(\d{2}):(\d{2})\]/);
-      if (timestampMatch) {
-        const hours = parseInt(timestampMatch[1], 10);
-        const minutes = parseInt(timestampMatch[2], 10);
-        const seconds = parseInt(timestampMatch[3], 10);
-        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+  cacheElements(container);
+  rebuildHeaderTools();
+  bindStaticEvents();
+  subscribeToState();
+  setupVideoSync();
 
-        // Seek the video
-        const video = document.querySelector('video');
-        if (video) {
-          video.currentTime = totalSeconds;
-          if (video.paused) video.play();
-        }
-      }
-    });
-  }
+  // Initial visibility
+  toggle(elements.outputWrapper, false);
+  toggle(elements.results, false);
+  toggle(elements.searchClear, false);
+  toggle(elements.searchCount, false);
+  toggle(elements.copyFilteredBtn, false);
 
-  updateTrackSelect(state.tracks);
   return container;
-};
+}
 
-export const destroyPanel = () => {
-  stopObserving();
-  const el = document.getElementById(PANEL_ID);
-  if (el?.parentNode) el.parentNode.removeChild(el);
-};
-
-// Export resetPlacement for use in navigation
-export { resetPlacement };
+// Destroy panel
+export function destroyPanel() {
+  cleanupVideoSync();
+  unsubs.forEach((u) => u());
+  unsubs = [];
+  elements = {};
+}

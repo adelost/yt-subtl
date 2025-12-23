@@ -1,7 +1,7 @@
 {
-  "name": "yt-subtl",
-  "description": "Adds an inline panel on YouTube watch pages to fetch and show full subtitles/transcript.",
-  "version": "1.1.0",
+  "name": "YouTube Transcript Reader",
+  "description": "Read YouTube transcripts without clicking Show transcript. Search, copy, and click timestamps to jump.",
+  "version": "1.0.0",
   "manifest_version": 3,
   "permissions": [
     "scripting",
@@ -18,8 +18,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.youtube.com/*",
-        "http://www.youtube.com/*"
+        "https://www.youtube.com/*"
       ],
       "js": [
         "content-script.js"
@@ -31,5 +30,9 @@
       "world": "MAIN"
     }
   ],
-  "icons": {}
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
 }

@@ -1,4 +1,4 @@
-import { fetchCaption } from '../../lib/utils.js';
+import { fetchCaption } from '../../lib/api.js';
 import { parseTranscript } from '../../lib/parsers.js';
 import { reportStatus } from '../../shared/status-bus.js';
 

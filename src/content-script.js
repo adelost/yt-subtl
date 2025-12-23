@@ -1,59 +1,74 @@
-// Main entry point for YouTube Transcript extension
+/**
+ * Content Script - Entry point
+ * Minimal orchestration, UI logic in ui/
+ */
 
 import { extractCaptionTracks } from './lib/youtube.js';
 import { injectObserver, onHarvestEvent } from './lib/harvest.js';
-import { state, updateTrackSelect } from './ui/state.js';
-import { createPanel, destroyPanel, resetPlacement } from './ui/panel.js';
-import { handleCopy, handleFetch } from './ui/actions.js';
+import { initPanel, removePanel, updateTracks, resetPlacement } from './ui/index.js';
 
-// --- Lifecycle ----------------------------------------------------------
-const updateCaptions = () => {
-  const data = extractCaptionTracks();
-  state.tracks = data.tracks || [];
-  state.videoId = data.videoId || null;
+// Only run on YouTube
+if (!location.hostname.includes('youtube.com')) {
+  throw new Error('Not YouTube');
+}
 
-  if (state.elements) {
-    updateTrackSelect(state.tracks);
-
-    // Auto-load if enabled
-    const autoloadEnabled = localStorage.getItem('ytxt-autoload') === 'true';
-    if (autoloadEnabled && state.tracks?.length > 0 && !state.elements.output.value) {
-      // Small delay to ensure UI is ready
-      setTimeout(() => handleFetch(), 500);
-    }
-  }
+// Check if ad is playing
+const isAdPlaying = () => {
+  const player = document.querySelector('.html5-video-player');
+  return player?.classList.contains('ad-showing') || false;
 };
 
-const onNavigate = () => {
-  state.tracks = [];
-  state.videoId = null;
-  state.elements = null;
+// Update captions from YouTube data
+const updateCaptions = () => {
+  const { tracks, videoId } = extractCaptionTracks();
+  updateTracks(tracks, videoId);
+};
 
-  destroyPanel();
+// Handle navigation
+const onNavigate = () => {
+  removePanel();
   resetPlacement();
-  createPanel();
+  initPanel();
   updateCaptions();
 };
 
-// --- Init ---------------------------------------------------------------
-// Install page-context observer and bridge harvested templates
-injectObserver();
-window.addEventListener('ytxt:transcript-template', (e) => {
-  try { onHarvestEvent(e.detail); } catch {}
-});
-window.addEventListener('yt-navigate-finish', onNavigate);
-window.addEventListener('yt-page-data-updated', updateCaptions);
-
-// Singleton keyboard shortcut (registered once, never removed)
-document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-    e.preventDefault();
-    handleCopy();
+// Watch for ads
+let wasAdPlaying = false;
+const adObserver = new MutationObserver(() => {
+  const adNow = isAdPlaying();
+  if (wasAdPlaying && !adNow) {
+    setTimeout(updateCaptions, 1500);
   }
+  wasAdPlaying = adNow;
 });
 
-// PlacementManager now handles layout changes automatically via its observers
+const startAdObserver = () => {
+  const player = document.querySelector('.html5-video-player');
+  if (player) {
+    adObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+    wasAdPlaying = isAdPlaying();
+  }
+};
 
-// Initial mount
-createPanel();
-setTimeout(updateCaptions, 1000);
+// Wait for DOM to be ready before initializing
+const init = () => {
+  injectObserver();
+  window.addEventListener('ytxt:transcript-template', (e) => {
+    try { onHarvestEvent(e.detail); } catch {}
+  });
+  window.addEventListener('yt-navigate-finish', onNavigate);
+  window.addEventListener('yt-page-data-updated', updateCaptions);
+
+  initPanel();
+  setTimeout(() => {
+    updateCaptions();
+    startAdObserver();
+  }, 1000);
+};
+
+// Run when DOM is ready (handles document_start timing)
+if (document.body) {
+  init();
+} else {
+  document.addEventListener('DOMContentLoaded', init);
+}
