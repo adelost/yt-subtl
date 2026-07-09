@@ -40,6 +40,13 @@
   overflow: hidden;
 }
 
+/* Collapsed = ghost mode: no fill, dim text, near-zero visual weight.
+ * Hover restores the chip surface so it still reads as clickable. */
+.ytxt-panel[data-collapsed] .ytxt-drawer { background: transparent; }
+.ytxt-panel[data-collapsed] .ytxt-header { min-height: 36px; }
+.ytxt-panel[data-collapsed] .ytxt-title { color: var(--ytxt-text-dim); }
+.ytxt-panel[data-collapsed] .ytxt-drawer:hover .ytxt-title { color: var(--ytxt-text); }
+
 /* === Header: the always-visible slim bar === */
 .ytxt-header {
   display: flex;
@@ -52,7 +59,7 @@
 }
 
 .ytxt-panel[data-collapsed] .ytxt-drawer:hover {
-  background: var(--ytxt-surface-hover);
+  background: var(--ytxt-surface);
 }
 
 .ytxt-title {
