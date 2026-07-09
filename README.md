@@ -1,16 +1,16 @@
-# YouTube Transcript Extension
+# YouTube Transcript Reader
 
 Adds an inline panel on YouTube watch pages to fetch and display full subtitles/transcripts.
 
 ## Features
 
-- 📝 Extract transcripts from any YouTube video with captions
-- ⏱️ Optional timestamp inclusion
-- 📋 One-click copy to clipboard (Ctrl+Shift+C)
-- 💾 Download as .txt file
-- 🎨 Clean, modern UI that matches YouTube's design
-- 🔒 Works with authenticated content (members-only, age-restricted)
-- 🌐 Multi-language support with auto-selection
+- Extract transcripts from YouTube videos with available captions
+- Search transcript text directly on the watch page
+- Click timestamps to jump to the matching moment in the video
+- Copy the transcript or current search results
+- Download transcripts as `.txt` files
+- Optional timestamp display
+- Multi-language support with automatic selection
 
 ## Development
 
@@ -80,13 +80,6 @@ The extension uses ES6 modules bundled with Rollup for a clean, modular codebase
 - **ui/** - User interface components and state management
 - **Singleton patterns** - Keyboard shortcuts and observers initialized once
 - **Defensive coding** - Guards against null state during navigation
-
-## Bug Fixes
-
-- ✅ Fixed keyboard shortcut listener leak on panel rebuild
-- ✅ Fixed credentials handling for authenticated YouTube content
-- ✅ Added null guards to prevent crashes during navigation
-- ✅ Proper error handling throughout
 
 ## License
 
