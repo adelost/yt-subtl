@@ -1,0 +1,354 @@
+/* YouTube Transcript Reader - native YouTube look.
+ *
+ * Design contract: the panel must read as a built-in YouTube module, not a
+ * third-party app. All colors come from YouTube's own design tokens
+ * (--yt-spec-*) so the panel follows YouTube's light/dark theme exactly.
+ * Fallback values assume dark theme (the tokens exist on any modern YouTube).
+ * Single accent = YouTube's own link blue, used only for timestamps,
+ * active states, and transient feedback. No gradients, no brand colors.
+ */
+
+.ytxt-panel {
+  --ytxt-text: var(--yt-spec-text-primary, #f1f1f1);
+  --ytxt-text-dim: var(--yt-spec-text-secondary, #aaa);
+  --ytxt-surface: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
+  --ytxt-surface-hover: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
+  --ytxt-accent: var(--yt-spec-call-to-action, #3ea6ff);
+  --ytxt-outline: rgba(128, 128, 128, 0.25);
+  --ytxt-radius: 12px;
+
+  font-family: "Roboto", "Arial", sans-serif;
+  font-size: 1.4rem;
+  line-height: 2rem;
+  color: var(--ytxt-text);
+}
+
+.ytxt-mode-sidebar { margin-bottom: 8px; }
+.ytxt-mode-inline { width: 100%; margin: 8px 0 16px; }
+.ytxt-floating {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: min(480px, 42vw);
+  z-index: 10000;
+}
+
+/* === Drawer (the module box) === */
+.ytxt-drawer {
+  background: var(--ytxt-surface);
+  border-radius: var(--ytxt-radius);
+  overflow: hidden;
+}
+
+/* === Header: the always-visible slim bar === */
+.ytxt-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 14px;
+  min-height: 40px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ytxt-panel[data-collapsed] .ytxt-drawer:hover {
+  background: var(--ytxt-surface-hover);
+}
+
+.ytxt-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.4rem;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+}
+
+.ytxt-title svg { color: var(--ytxt-text-dim); flex-shrink: 0; }
+
+.ytxt-flash {
+  font-size: 1.2rem;
+  color: var(--ytxt-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytxt-flash[data-type="ok"] { color: var(--ytxt-accent); }
+
+.ytxt-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* === Icon buttons (YouTube's round hover discs) === */
+.ytxt-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ytxt-text-dim);
+  cursor: pointer;
+  padding: 0;
+}
+
+.ytxt-icon-btn:hover { background: var(--ytxt-surface-hover); color: var(--ytxt-text); }
+.ytxt-icon-btn[data-active] { color: var(--ytxt-accent); }
+.ytxt-icon-btn[disabled] { opacity: 0.4; cursor: default; }
+.ytxt-icon-btn[disabled]:hover { background: transparent; color: var(--ytxt-text-dim); }
+
+.ytxt-chevron svg { transition: transform 0.2s ease; }
+.ytxt-panel:not([data-collapsed]) .ytxt-chevron svg { transform: rotate(180deg); }
+
+/* Toggles (timestamps / autoload) rendered as icon buttons with active state */
+.ytxt-toggle { position: relative; }
+.ytxt-toggle input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; }
+
+/* === Body === */
+.ytxt-body { padding: 0 12px 12px; }
+.ytxt-panel[data-collapsed] .ytxt-body { display: none; }
+
+.ytxt-empty {
+  padding: 4px 2px 8px;
+  color: var(--ytxt-text-dim);
+  font-size: 1.3rem;
+}
+
+/* === Controls row: track select + fetch === */
+.ytxt-controls { display: flex; gap: 8px; margin-bottom: 8px; }
+
+.ytxt-select {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 18px;
+  background: var(--ytxt-surface);
+  color: var(--ytxt-text);
+  font: inherit;
+  font-size: 1.3rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.ytxt-select:hover { background: var(--ytxt-surface-hover); }
+.ytxt-select option { background: #212121; color: #f1f1f1; }
+
+.ytxt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 18px;
+  background: var(--ytxt-surface);
+  color: var(--ytxt-text);
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ytxt-btn:hover { background: var(--ytxt-surface-hover); }
+.ytxt-btn[disabled] { opacity: 0.5; cursor: default; }
+
+.ytxt-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--ytxt-text-dim);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ytxt-spin 0.7s linear infinite;
+}
+
+@keyframes ytxt-spin { to { transform: rotate(360deg); } }
+
+/* === Output === */
+.ytxt-output-wrapper { display: flex; flex-direction: column; gap: 8px; }
+
+.ytxt-output {
+  width: 100%;
+  min-height: 260px;
+  max-height: 45vh;
+  padding: 8px 2px;
+  border: none;
+  background: transparent;
+  color: var(--ytxt-text);
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1.9rem;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* Search results + chips share the scroll area look */
+.ytxt-results,
+.ytxt-chips {
+  max-height: 45vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.ytxt-result-line,
+.ytxt-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ytxt-text);
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ytxt-result-line:hover,
+.ytxt-chip:hover { background: var(--ytxt-surface-hover); }
+
+.ytxt-chip .time {
+  color: var(--ytxt-accent);
+  font-size: 1.2rem;
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 44px;
+}
+
+.ytxt-chip .text { flex: 1; }
+
+.ytxt-chip[data-active] {
+  background: var(--ytxt-surface);
+  box-shadow: inset 2px 0 0 var(--ytxt-accent);
+}
+
+.ytxt-no-results {
+  padding: 12px 8px;
+  color: var(--ytxt-text-dim);
+  font-size: 1.3rem;
+}
+
+mark.ytxt-highlight {
+  background: rgba(62, 166, 255, 0.3);
+  color: inherit;
+  border-radius: 2px;
+}
+
+/* === Toolbar: search + views + actions === */
+.ytxt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ytxt-search-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 140px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 17px;
+  background: var(--ytxt-surface);
+}
+
+.ytxt-search-wrapper svg { color: var(--ytxt-text-dim); flex-shrink: 0; }
+
+.ytxt-search {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--ytxt-text);
+  font: inherit;
+  font-size: 1.3rem;
+  outline: none;
+}
+
+.ytxt-search::placeholder { color: var(--ytxt-text-dim); }
+
+.ytxt-search-count {
+  font-size: 1.2rem;
+  color: var(--ytxt-text-dim);
+  white-space: nowrap;
+}
+
+.ytxt-search-wrapper .ytxt-icon-btn { width: 26px; height: 26px; }
+
+.ytxt-view-switcher,
+.ytxt-actions { display: flex; align-items: center; gap: 2px; }
+
+/* === Footer === */
+.ytxt-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 1.2rem;
+  color: var(--ytxt-text-dim);
+}
+
+.ytxt-status[data-type="error"] { color: var(--yt-spec-error-indicator, #f28b82); }
+.ytxt-status[data-type="ok"] { color: var(--ytxt-accent); }
+
+/* === FAB mode (Shorts) === */
+.ytxt-mode-fab { position: fixed; right: 16px; bottom: 80px; z-index: 10000; }
+
+.ytxt-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.ytxt-fab:hover { background: rgba(0, 0, 0, 0.8); }
+
+.ytxt-mode-fab .ytxt-drawer {
+  display: none;
+  position: fixed;
+  right: 16px;
+  bottom: 80px;
+  width: min(400px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--yt-spec-menu-background, #282828);
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.5);
+  z-index: 10001;
+}
+
+.ytxt-mode-fab .ytxt-drawer.ytxt-drawer-open { display: block; }
+
+/* === Scrollbars === */
+.ytxt-panel ::-webkit-scrollbar { width: 8px; }
+.ytxt-panel ::-webkit-scrollbar-thumb {
+  background: var(--ytxt-surface-hover);
+  border-radius: 4px;
+}
+.ytxt-panel ::-webkit-scrollbar-track { background: transparent; }
+
+/* === Utility === */
+.ytxt-hidden { display: none !important; }

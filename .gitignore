@@ -1,4 +1,4 @@
 node_modules/
-dist/content-script.js
+dist/
 *.log
 .DS_Store

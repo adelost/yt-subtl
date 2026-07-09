@@ -12,17 +12,25 @@ export const videoId = writable(null);
 export const selectedTrack = writable(0);
 export const transcript = writable('');
 export const loading = writable(false);
-export const collapsed = writable(false);
 export const drawerOpen = writable(false);
 export const search = writable('');
 export const status = writable('');
 export const statusType = writable('');
 export const activeChipTime = writable(-1);
 
+// Quick-copy feedback shown on the header bar: 'idle' | 'busy' | 'ok' | 'error'
+export const quickCopyState = writable('idle');
+
+// Bumped when a new video's tracks arrive; lets the panel react to
+// "fresh video ready" (autoload) without state importing actions.
+export const tracksReadyTick = writable(0);
+
 // Persisted state
 export const view = persisted('ytxt-view', 'text');
 export const includeTimestamps = persisted('ytxt-timestamps', true);
 export const autoload = persisted('ytxt-autoload', false);
+// Collapsed by default: the panel stays a discreet slim bar until asked for.
+export const collapsed = persisted('ytxt-collapsed', true);
 
 let trackRevision = 0;
 
@@ -127,30 +135,25 @@ export function updateTracks(newTracks, newVideoId) {
   statusType.set('');
   activeChipTime.set(-1);
   search.set('');
+  quickCopyState.set('idle');
 
   if (nextTracks.length) {
     selectBestTrack();
-
-    if (autoload.get()) {
-      // Import dynamically to avoid circular dependency
-      import('./actions.js').then(({ doFetch }) => {
-        setTimeout(() => doFetch(), 500);
-      });
-    }
+    tracksReadyTick.update((n) => n + 1);
   }
 }
 
-// Reset state
+// Reset state (collapsed/view/toggles are user preferences and survive resets)
 export function resetState() {
   tracks.set([]);
   videoId.set(null);
   selectedTrack.set(0);
   transcript.set('');
   loading.set(false);
-  collapsed.set(false);
   drawerOpen.set(false);
   search.set('');
   status.set('');
   statusType.set('');
   activeChipTime.set(-1);
+  quickCopyState.set('idle');
 }

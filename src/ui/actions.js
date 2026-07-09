@@ -13,6 +13,7 @@ import {
   collapsed,
   includeTimestamps,
   filteredLines,
+  quickCopyState,
   setStatus,
   getTrackRevision,
   trackSignature,
@@ -49,17 +50,53 @@ export async function doFetch() {
 
   try {
     const result = await fetchTranscript(track, $videoId, $includeTimestamps);
-    if (!isCurrentRequest()) return;
+    if (!isCurrentRequest()) return true;
     transcript.set(result);
-    collapsed.set(false);
     const label = track.languageCode + (track.kind === 'asr' ? ' (auto)' : '');
     setStatus(`Loaded: ${label}`, 'ok');
+    return true;
   } catch (err) {
-    if (!isCurrentRequest()) return;
+    if (!isCurrentRequest()) return false;
     setStatus(err.message || 'Failed to load', 'error');
+    return false;
   } finally {
     if (isCurrentRequest()) loading.set(false);
   }
+}
+
+/**
+ * One-click copy from the collapsed bar: fetch the best track if nothing is
+ * loaded yet, then copy. Never expands the panel — that is the whole point.
+ * Feedback goes through quickCopyState which the header bar renders.
+ */
+export async function quickCopy() {
+  if (quickCopyState.get() === 'busy') return;
+
+  quickCopyState.set('busy');
+
+  if (loading.get()) await whenLoadingSettles();
+  if (!transcript.get()) await doFetch();
+
+  if (!transcript.get()) {
+    quickCopyState.set('error');
+    return;
+  }
+
+  const ok = await copyToClipboard(transcript.get());
+  quickCopyState.set(ok ? 'ok' : 'error');
+}
+
+// Resolves when an in-flight fetch (e.g. autoload) finishes, so quick-copy
+// joins it instead of racing it.
+function whenLoadingSettles() {
+  return new Promise((resolve) => {
+    const unsub = loading.subscribe((val) => {
+      if (!val) {
+        unsub();
+        resolve();
+      }
+    });
+  });
 }
 
 export async function copy() {
