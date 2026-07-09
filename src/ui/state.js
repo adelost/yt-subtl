@@ -24,6 +24,8 @@ export const view = persisted('ytxt-view', 'text');
 export const includeTimestamps = persisted('ytxt-timestamps', true);
 export const autoload = persisted('ytxt-autoload', false);
 
+let trackRevision = 0;
+
 // Derived state
 export const hasTracks = derived(tracks, (t) => t.length > 0);
 
@@ -65,6 +67,37 @@ export function trackLabel(track, i) {
   return track.kind === 'asr' ? `${name} (auto)` : name;
 }
 
+const trackName = (track) => {
+  if (track?.name?.simpleText) return track.name.simpleText;
+  if (Array.isArray(track?.name?.runs)) return track.name.runs.map((run) => run.text || '').join('');
+  return '';
+};
+
+export function trackSignature(track) {
+  if (!track) return '';
+  return [
+    track.languageCode || '',
+    track.kind || '',
+    track.vssId || track.vss_id || '',
+    trackName(track),
+    track.baseUrl || '',
+    track.params || '',
+  ].join('|');
+}
+
+export function trackListSignature(trackList = []) {
+  return (trackList || []).map(trackSignature).join('\n');
+}
+
+export function shouldResetForTrackUpdate(currentVideoId, currentTracks, nextVideoId, nextTracks) {
+  if (currentVideoId !== nextVideoId) return true;
+  return trackListSignature(currentTracks) !== trackListSignature(nextTracks);
+}
+
+export function getTrackRevision() {
+  return trackRevision;
+}
+
 export function clearSearch() {
   search.set('');
 }
@@ -79,15 +112,23 @@ export function setAutoload(value) {
 
 // Update function for external use (called from content-script)
 export function updateTracks(newTracks, newVideoId) {
-  tracks.set(newTracks || []);
+  const nextTracks = newTracks || [];
+  const shouldReset = shouldResetForTrackUpdate(videoId.get(), tracks.get(), newVideoId, nextTracks);
+
+  tracks.set(nextTracks);
   videoId.set(newVideoId);
+
+  if (!shouldReset) return;
+
+  trackRevision++;
   transcript.set('');
+  loading.set(false);
   status.set('');
   statusType.set('');
   activeChipTime.set(-1);
   search.set('');
 
-  if (newTracks?.length) {
+  if (nextTracks.length) {
     selectBestTrack();
 
     if (autoload.get()) {

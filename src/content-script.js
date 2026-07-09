@@ -29,7 +29,10 @@ const onNavigate = () => {
   removePanel();
   resetPlacement();
   initPanel();
-  updateCaptions();
+  setTimeout(() => {
+    updateCaptions();
+    startAdObserver();
+  }, 1000);
 };
 
 // Watch for ads
@@ -43,6 +46,7 @@ const adObserver = new MutationObserver(() => {
 });
 
 const startAdObserver = () => {
+  adObserver.disconnect();
   const player = document.querySelector('.html5-video-player');
   if (player) {
     adObserver.observe(player, { attributes: true, attributeFilter: ['class'] });

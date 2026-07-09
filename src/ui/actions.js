@@ -14,7 +14,11 @@ import {
   includeTimestamps,
   filteredLines,
   setStatus,
+  getTrackRevision,
+  trackSignature,
 } from './state.js';
+
+let fetchToken = 0;
 
 export async function doFetch() {
   const $tracks = tracks.get();
@@ -22,25 +26,39 @@ export async function doFetch() {
   const $loading = loading.get();
   const $videoId = videoId.get();
   const $includeTimestamps = includeTimestamps.get();
+  const revision = getTrackRevision();
 
   if (!$tracks.length || $loading) return;
 
   const track = $tracks[$selectedTrack];
   if (!track) return;
 
+  const token = ++fetchToken;
+  const requestedTrack = trackSignature(track);
+
   loading.set(true);
   setStatus('Fetching...');
 
+  const isCurrentRequest = () => {
+    const currentTrack = tracks.get()[selectedTrack.get()];
+    return token === fetchToken &&
+      getTrackRevision() === revision &&
+      videoId.get() === $videoId &&
+      trackSignature(currentTrack) === requestedTrack;
+  };
+
   try {
     const result = await fetchTranscript(track, $videoId, $includeTimestamps);
+    if (!isCurrentRequest()) return;
     transcript.set(result);
     collapsed.set(false);
     const label = track.languageCode + (track.kind === 'asr' ? ' (auto)' : '');
     setStatus(`Loaded: ${label}`, 'ok');
   } catch (err) {
+    if (!isCurrentRequest()) return;
     setStatus(err.message || 'Failed to load', 'error');
   } finally {
-    loading.set(false);
+    if (isCurrentRequest()) loading.set(false);
   }
 }
 
