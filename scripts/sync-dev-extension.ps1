@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $distro = if ($env:YT_SUBTL_WSL_DISTRO) { $env:YT_SUBTL_WSL_DISTRO } else { "Ubuntu-22.04" }
 $repoLinux = if ($env:YT_SUBTL_WSL_REPO) { $env:YT_SUBTL_WSL_REPO } else { "/home/adelost/lsrc/yt-subtl" }
-$target = if ($env:YT_SUBTL_DEV_DIST) { $env:YT_SUBTL_DEV_DIST } else { Join-Path $env:LOCALAPPDATA "yt-subtl-dev\dist" }
+$target = if ($env:YT_SUBTL_DEV_DIST) { $env:YT_SUBTL_DEV_DIST } else { "Q:\yt-subtl-dev\dist" }
 $chrome = if ($env:YT_SUBTL_CHROME) { $env:YT_SUBTL_CHROME } else { "C:\Program Files\Google\Chrome\Application\chrome.exe" }
 
 Write-Host "Building yt-subtl in WSL ($distro): $repoLinux"
