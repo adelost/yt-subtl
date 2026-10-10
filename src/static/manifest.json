@@ -1,20 +1,8 @@
 {
   "name": "YouTube Transcript Reader",
   "description": "Read YouTube transcripts without clicking Show transcript. Search, copy, and click timestamps to jump.",
-  "version": "1.2.0",
+  "version": "1.2.3",
   "manifest_version": 3,
-  "permissions": [
-    "scripting",
-    "webNavigation",
-    "tabs"
-  ],
-  "host_permissions": [
-    "https://www.youtube.com/*",
-    "https://*.youtube.com/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  },
   "content_scripts": [
     {
       "matches": [

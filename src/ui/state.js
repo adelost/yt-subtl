@@ -5,6 +5,7 @@
 import { writable, persisted, derived } from '../lib/store.js';
 import { pickBestTrack } from '../lib/youtube.js';
 import { isShorts } from '../lib/placement.js';
+import { getContent } from '../lib/helpers.js';
 
 // Core state
 export const tracks = writable([]);
@@ -41,8 +42,14 @@ export const lines = derived(transcript, (t) =>
   t ? t.split('\n').filter((l) => l.trim()) : []
 );
 
+/** WHAT: Maps the timestamp preference for display/export. WHY: Keeps original seekable cues intact. */
+export const displayTranscript = derived([transcript, includeTimestamps], ([text, timestamps]) =>
+  timestamps ? text : text.split('\n').map(getContent).join('\n')
+);
+
+/** WHAT: Filters cues by the trimmed search. WHY: Keeps accidental surrounding whitespace from hiding matches. */
 export const filteredLines = derived([lines, search], ([l, s]) =>
-  s ? l.filter((line) => line.toLowerCase().includes(s.toLowerCase())) : l
+  s.trim() ? l.filter((line) => line.toLowerCase().includes(s.trim().toLowerCase())) : l
 );
 
 export const matchCount = derived([search, filteredLines], ([s, f]) =>
@@ -60,6 +67,22 @@ export function setStatus(msg, type = '') {
   status.set(msg);
   statusType.set(type);
 }
+
+function clearTranscript() {
+  trackRevision++;
+  transcript.set('');
+  loading.set(false);
+  setStatus('');
+  activeChipTime.set(-1);
+  search.set('');
+  quickCopyState.set('idle');
+}
+
+let previousTrack = selectedTrack.get();
+selectedTrack.subscribe((value) => {
+  if (value !== previousTrack) clearTranscript();
+  previousTrack = value;
+});
 
 export function selectBestTrack() {
   const $tracks = tracks.get();
@@ -118,7 +141,7 @@ export function setAutoload(value) {
   autoload.set(value);
 }
 
-// Update function for external use (called from content-script)
+/** WHAT: Assigns the current video's available tracks. WHY: Keeps duplicate page updates from destroying loaded text. */
 export function updateTracks(newTracks, newVideoId) {
   const nextTracks = newTracks || [];
   const shouldReset = shouldResetForTrackUpdate(videoId.get(), tracks.get(), newVideoId, nextTracks);
@@ -128,14 +151,7 @@ export function updateTracks(newTracks, newVideoId) {
 
   if (!shouldReset) return;
 
-  trackRevision++;
-  transcript.set('');
-  loading.set(false);
-  status.set('');
-  statusType.set('');
-  activeChipTime.set(-1);
-  search.set('');
-  quickCopyState.set('idle');
+  clearTranscript();
 
   if (nextTracks.length) {
     selectBestTrack();
@@ -143,8 +159,9 @@ export function updateTracks(newTracks, newVideoId) {
   }
 }
 
-// Reset state (collapsed/view/toggles are user preferences and survive resets)
+/** WHAT: Assigns video-owned state, preserving display preferences. WHY: Keeps navigation from leaking the previous transcript. */
 export function resetState() {
+  clearTranscript();
   tracks.set([]);
   videoId.set(null);
   selectedTrack.set(0);

@@ -9,6 +9,7 @@ import {
   updateTracks,
   videoId,
   resetState,
+  loading,
 } from '../src/ui/state.js';
 
 const track = (overrides = {}) => ({
@@ -37,6 +38,14 @@ describe('shouldResetForTrackUpdate', () => {
 });
 
 describe('updateTracks', () => {
+  it('invalidates a loaded transcript and in-flight request when the caption track changes', () => {
+    updateTracks([track(), track({ languageCode: 'sv', vssId: '.sv' })], 'abc');
+    transcript.set('[00:01] Old English caption');
+    loading.set(true);
+    selectedTrack.set(1);
+    assert.strictEqual(transcript.get(), '');
+    assert.strictEqual(loading.get(), false);
+  });
   it('should preserve loaded transcript state for duplicate YouTube page-data updates', () => {
     updateTracks([track()], 'abc');
     transcript.set('Loaded transcript');

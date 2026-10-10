@@ -4,13 +4,14 @@ import { tryDomPanel } from './sources/dom-panel.js';
 import { tryTimedtextHarvest } from './sources/timedtext-harvest.js';
 import { tryTimedtextDirect } from './sources/timedtext-direct.js';
 
+/** WHAT: Fetches captions for one selected track. WHY: Keeps source retries out of UI actions. */
 export const fetchTranscript = async (track, videoId, withTS) => {
-  // Strategy order: YouTubeI → DOM panel → harvested timedtext → direct timedtext
+  // Track-bound sources first; an open DOM panel may be on another language.
   const steps = [
     { name: 'YouTubeI', fn: tryYouTubeI },
-    { name: 'DOM panel', fn: tryDomPanel },
     { name: 'Timedtext (harvest)', fn: tryTimedtextHarvest },
-    { name: 'Timedtext (direct)', fn: tryTimedtextDirect }
+    { name: 'Timedtext (direct)', fn: tryTimedtextDirect },
+    { name: 'DOM panel', fn: tryDomPanel }
   ];
 
   for (const step of steps) {

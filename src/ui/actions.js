@@ -9,6 +9,7 @@ import {
   videoId,
   selectedTrack,
   transcript,
+  displayTranscript,
   loading,
   collapsed,
   includeTimestamps,
@@ -21,12 +22,12 @@ import {
 
 let fetchToken = 0;
 
-export async function doFetch() {
+/** WHAT: Loads one current video/track request. WHY: Keeps late responses from updating a different panel generation. */
+export async function doFetch({ load = fetchTranscript } = {}) {
   const $tracks = tracks.get();
   const $selectedTrack = selectedTrack.get();
   const $loading = loading.get();
   const $videoId = videoId.get();
-  const $includeTimestamps = includeTimestamps.get();
   const revision = getTrackRevision();
 
   if (!$tracks.length || $loading) return;
@@ -49,8 +50,9 @@ export async function doFetch() {
   };
 
   try {
-    const result = await fetchTranscript(track, $videoId, $includeTimestamps);
-    if (!isCurrentRequest()) return true;
+    const result = await load(track, $videoId, true);
+    if (!isCurrentRequest()) return false;
+    if (!result?.trim()) throw new Error('No captions returned. Try another track.');
     transcript.set(result);
     const label = track.languageCode + (track.kind === 'asr' ? ' (auto)' : '');
     setStatus(`Loaded: ${label}`, 'ok');
@@ -68,27 +70,33 @@ export async function doFetch() {
  * One-click copy from the collapsed bar: fetch the best track if nothing is
  * loaded yet, then copy. Never expands the panel — that is the whole point.
  * Feedback goes through quickCopyState which the header bar renders.
+ * WHAT: Dispatches the current transcript without expanding the panel.
+ * WHY: Keeps concurrent autoload and navigation from copying the wrong video.
  */
 export async function quickCopy() {
   if (quickCopyState.get() === 'busy') return;
 
   quickCopyState.set('busy');
+  const revision = getTrackRevision();
 
   if (loading.get()) await whenLoadingSettles();
   if (!transcript.get()) await doFetch();
+  if (revision !== getTrackRevision()) return;
 
   if (!transcript.get()) {
     quickCopyState.set('error');
     return;
   }
 
-  const ok = await copyToClipboard(transcript.get());
+  const ok = await copyToClipboard(displayTranscript.get());
+  if (revision !== getTrackRevision()) return;
   quickCopyState.set(ok ? 'ok' : 'error');
 }
 
 // Resolves when an in-flight fetch (e.g. autoload) finishes, so quick-copy
 // joins it instead of racing it.
 function whenLoadingSettles() {
+  if (!loading.get()) return Promise.resolve();
   return new Promise((resolve) => {
     const unsub = loading.subscribe((val) => {
       if (!val) {
@@ -99,8 +107,9 @@ function whenLoadingSettles() {
   });
 }
 
+/** WHAT: Dispatches the visible transcript projection. WHY: Keeps the timestamp preference consistent with exported bytes. */
 export async function copy() {
-  const $transcript = transcript.get();
+  const $transcript = displayTranscript.get();
   if (!$transcript) {
     setStatus('Nothing to copy', 'warn');
     return;
@@ -110,6 +119,7 @@ export async function copy() {
   setStatus(ok ? '✓ Copied' : 'Copy failed', ok ? 'ok' : 'error');
 }
 
+/** WHAT: Dispatches search-matching captions. WHY: Keeps filtered export bound to the displayed search and timestamp preference. */
 export async function copyFiltered() {
   const lines = filteredLines.get();
   if (!lines.length) {
@@ -117,12 +127,14 @@ export async function copyFiltered() {
     return;
   }
 
-  const ok = await copyToClipboard(lines.join('\n'));
+  const text = includeTimestamps.get() ? lines.join('\n') : lines.map((line) => line.replace(/^\[[^\]]+\]\s*/, '')).join('\n');
+  const ok = await copyToClipboard(text);
   setStatus(ok ? `✓ Copied ${lines.length} lines` : 'Copy failed', ok ? 'ok' : 'error');
 }
 
+/** WHAT: Saves the current transcript as text. WHY: Keeps filenames and content bound to the current video. */
 export function download() {
-  const $transcript = transcript.get();
+  const $transcript = displayTranscript.get();
   const $videoId = videoId.get();
 
   if (!$transcript) {
@@ -131,7 +143,7 @@ export function download() {
   }
 
   downloadText($transcript, `transcript-${$videoId || 'video'}.txt`);
-  setStatus('✓ Downloaded', 'ok');
+  setStatus('Download started', 'ok');
 }
 
 export function toggleCollapse() {

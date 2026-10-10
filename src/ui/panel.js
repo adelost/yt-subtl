@@ -12,6 +12,7 @@
  */
 
 import { el, clear, toggle, toggleClass, setAttr, highlightedText } from '../lib/dom.js';
+import { bindVideoSync } from './video-sync.js';
 import { Icon } from './components/Icon.js';
 import { parseTimestamp, getTimestamp, getContent, seekVideo } from '../lib/helpers.js';
 import { subscribeAll } from '../lib/store.js';
@@ -20,6 +21,7 @@ import {
   tracks,
   selectedTrack,
   transcript,
+  displayTranscript,
   loading,
   collapsed,
   drawerOpen,
@@ -33,6 +35,7 @@ import {
   quickCopyState,
   tracksReadyTick,
   hasTracks,
+  lines,
   filteredLines,
   matchCount,
   stats,
@@ -44,41 +47,49 @@ import {
 } from './state.js';
 
 let unsubs = [];
-let timers = [];
-let boundVideo = null;
-let videoHandler = null;
+let timers = new Set();
+let cleanupVideo = () => {};
 
 const sub = (unsubscribe) => unsubs.push(unsubscribe);
-const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+const later = (fn, ms) => {
+  const timer = setTimeout(() => { timers.delete(timer); fn(); }, ms);
+  timers.add(timer);
+};
 
 // --- Header: the always-visible slim bar ---
 
 function buildHeader(isShorts) {
-  const flash = el('span', { class: 'ytxt-flash' });
+  const flash = el('span', { class: 'ytxt-flash', 'aria-live': 'polite' });
 
   const quickCopyBtn = el('button', {
     class: 'ytxt-icon-btn',
+    type: 'button',
     title: 'Copy transcript',
+    'aria-label': 'Copy transcript',
   }, Icon('copy', 16));
 
   const tsToggle = el('label', { class: 'ytxt-icon-btn ytxt-toggle', title: 'Include timestamps' }, [
-    el('input', { type: 'checkbox' }),
+    el('input', { type: 'checkbox', 'aria-label': 'Include timestamps' }),
     Icon('clock', 16),
   ]);
 
   const autoloadToggle = el('label', { class: 'ytxt-icon-btn ytxt-toggle', title: 'Auto-load on every video' }, [
-    el('input', { type: 'checkbox' }),
+    el('input', { type: 'checkbox', 'aria-label': 'Auto-load on every video' }),
     Icon('autoload', 16),
   ]);
 
   const chevron = el('button', {
     class: 'ytxt-icon-btn ytxt-chevron',
+    type: 'button',
     title: 'Expand',
+    'aria-label': 'Expand transcript panel',
   }, Icon('chevronDown', 16));
 
   const closeBtn = el('button', {
     class: 'ytxt-icon-btn',
+    type: 'button',
     title: 'Close',
+    'aria-label': 'Close transcript panel',
   }, Icon('close', 16));
 
   const tools = el('div', { class: 'ytxt-tools' }, [
@@ -89,7 +100,7 @@ function buildHeader(isShorts) {
   ]);
 
   const header = el('div', { class: 'ytxt-header' }, [
-    el('div', { class: 'ytxt-title' }, [
+    el('button', { class: 'ytxt-title', type: 'button', 'aria-label': isShorts ? 'Close transcript panel' : 'Toggle transcript panel' }, [
       Icon('transcript', 16),
       el('span', {}, 'Transcript'),
       flash,
@@ -120,12 +131,17 @@ function wireHeader(refs) {
   const { flash, quickCopyBtn, tsToggle, autoloadToggle, tsInput, autoloadInput, chevron } = refs;
 
   // Toggles only make sense with tracks and an open panel; the bar stays minimal.
-  sub(subscribeAll({ collapsed, hasTracks }, ({ collapsed: isCollapsed, hasTracks: has }) => {
-    const showToggles = has && !isCollapsed;
+  sub(subscribeAll({ collapsed, hasTracks, loading }, ({ collapsed: isCollapsed, hasTracks: has, loading: busy }) => {
+    const showToggles = has && (!isCollapsed || isShortsMode());
     toggle(tsToggle, showToggles);
     toggle(autoloadToggle, showToggles);
-    setAttr(quickCopyBtn, 'disabled', !has);
-    if (chevron) chevron.title = isCollapsed ? 'Expand' : 'Collapse';
+    setAttr(quickCopyBtn, 'disabled', !has || busy);
+    if (chevron) {
+      const action = isCollapsed ? 'Expand' : 'Collapse';
+      chevron.title = action;
+      chevron.setAttribute('aria-label', `${action} transcript panel`);
+      chevron.setAttribute('aria-expanded', String(!isCollapsed));
+    }
   }));
 
   sub(includeTimestamps.subscribe((val) => { tsInput.checked = val; }));
@@ -142,7 +158,7 @@ function wireHeader(refs) {
 
     flash.textContent =
       state === 'ok' ? 'Copied' :
-      state === 'error' ? (hasTracks.get() ? 'Failed to load' : 'No captions') : '';
+      state === 'error' ? 'Could not copy' : '';
     setAttr(flash, 'data-type', state === 'ok' ? 'ok' : null);
 
     if (state === 'ok' || state === 'error') {
@@ -156,10 +172,10 @@ function wireHeader(refs) {
 // --- Controls: track select + fetch button ---
 
 function buildControls() {
-  const select = el('select', { class: 'ytxt-select' });
+  const select = el('select', { class: 'ytxt-select', 'aria-label': 'Caption track' });
   const ctaText = el('span', { class: 'ytxt-cta-text' }, 'Get transcript');
   const spinner = el('span', { class: 'ytxt-spinner' });
-  const cta = el('button', { class: 'ytxt-btn' }, [ctaText, spinner]);
+  const cta = el('button', { class: 'ytxt-btn', type: 'button' }, [ctaText, spinner]);
   const controls = el('div', { class: 'ytxt-controls' }, [select, cta]);
 
   select.addEventListener('change', (e) => selectedTrack.set(Number(e.target.value)));
@@ -193,7 +209,8 @@ function seekFromTextarea(e) {
   const pos = e.target.selectionStart;
   const start = text.lastIndexOf('\n', pos - 1) + 1;
   const end = text.indexOf('\n', pos);
-  seekToLine(text.substring(start, end === -1 ? text.length : end));
+  const index = text.slice(0, start).split('\n').length - 1;
+  seekToLine(lines.get()[index] || text.substring(start, end === -1 ? text.length : end));
 }
 
 function renderResults(container, linesArr, searchVal) {
@@ -203,7 +220,7 @@ function renderResults(container, linesArr, searchVal) {
     return;
   }
   for (const line of linesArr) {
-    const btn = el('button', { class: 'ytxt-result-line' });
+    const btn = el('button', { class: 'ytxt-result-line', type: 'button' });
     btn.appendChild(highlightedText(line, searchVal));
     btn.addEventListener('click', () => seekToLine(line));
     container.appendChild(btn);
@@ -217,10 +234,11 @@ function renderChips(container, linesArr, searchVal, activeTime) {
     const textSpan = el('span', { class: 'text' });
     textSpan.appendChild(highlightedText(getContent(line), searchVal));
 
-    const chip = el('button', { class: 'ytxt-chip' }, [
+    const chip = el('button', { class: 'ytxt-chip', type: 'button' }, [
       el('span', { class: 'time' }, getTimestamp(line) || ''),
       textSpan,
     ]);
+    if (seconds !== null) chip.dataset.seconds = String(seconds);
     setAttr(chip, 'data-active', seconds !== null && seconds === activeTime);
     chip.addEventListener('click', () => seekToLine(line));
     container.appendChild(chip);
@@ -228,20 +246,41 @@ function renderChips(container, linesArr, searchVal, activeTime) {
 }
 
 function buildOutput() {
-  const textarea = el('textarea', { class: 'ytxt-output', readonly: true });
+  const textarea = el('textarea', {
+    class: 'ytxt-output',
+    readonly: true,
+    'aria-label': 'Transcript text',
+  });
   const results = el('div', { class: 'ytxt-results' });
   const chips = el('div', { class: 'ytxt-chips' });
 
-  const searchInput = el('input', { type: 'text', class: 'ytxt-search', placeholder: 'Search...' });
+  const searchInput = el('input', {
+    type: 'search',
+    class: 'ytxt-search',
+    placeholder: 'Search...',
+    'aria-label': 'Search transcript',
+  });
   const searchCount = el('span', { class: 'ytxt-search-count' });
-  const searchClear = el('button', { class: 'ytxt-icon-btn', title: 'Clear search' }, Icon('clearCircle', 14));
+  const searchClear = el('button', {
+    class: 'ytxt-icon-btn', type: 'button', title: 'Clear search', 'aria-label': 'Clear search',
+  }, Icon('clearCircle', 14));
 
-  const viewTextBtn = el('button', { class: 'ytxt-icon-btn', title: 'Text view' }, Icon('text', 16));
-  const viewChipsBtn = el('button', { class: 'ytxt-icon-btn', title: 'Timeline view' }, Icon('chips', 16));
+  const viewTextBtn = el('button', {
+    class: 'ytxt-icon-btn', type: 'button', title: 'Text view', 'aria-label': 'Text view',
+  }, Icon('text', 16));
+  const viewChipsBtn = el('button', {
+    class: 'ytxt-icon-btn', type: 'button', title: 'Timeline view', 'aria-label': 'Timeline view',
+  }, Icon('chips', 16));
 
-  const copyFilteredBtn = el('button', { class: 'ytxt-icon-btn', title: 'Copy search matches' }, Icon('filter', 16));
-  const copyBtn = el('button', { class: 'ytxt-icon-btn', title: 'Copy transcript' }, Icon('copy', 16));
-  const downloadBtn = el('button', { class: 'ytxt-icon-btn', title: 'Download .txt' }, Icon('download', 16));
+  const copyFilteredBtn = el('button', {
+    class: 'ytxt-icon-btn', type: 'button', title: 'Copy search matches', 'aria-label': 'Copy search matches',
+  }, Icon('filter', 16));
+  const copyBtn = el('button', {
+    class: 'ytxt-icon-btn', type: 'button', title: 'Copy transcript', 'aria-label': 'Copy transcript',
+  }, Icon('copy', 16));
+  const downloadBtn = el('button', {
+    class: 'ytxt-icon-btn', type: 'button', title: 'Download .txt', 'aria-label': 'Download transcript as text',
+  }, Icon('download', 16));
 
   const wrapper = el('div', { class: 'ytxt-output-wrapper' }, [
     el('div', { class: 'ytxt-toolbar' }, [
@@ -268,7 +307,7 @@ function buildOutput() {
   copyFilteredBtn.addEventListener('click', copyFiltered);
   downloadBtn.addEventListener('click', download);
 
-  sub(transcript.subscribe((val) => {
+  sub(displayTranscript.subscribe((val) => {
     textarea.value = val;
     toggle(wrapper, !!val);
   }));
@@ -280,18 +319,23 @@ function buildOutput() {
     toggle(chips, !showText);
     setAttr(viewTextBtn, 'data-active', showText);
     setAttr(viewChipsBtn, 'data-active', !showText);
+    setAttr(viewTextBtn, 'aria-pressed', String(showText));
+    setAttr(viewChipsBtn, 'aria-pressed', String(!showText));
     if (searchInput.value !== searchVal) searchInput.value = searchVal;
     toggle(searchClear, !!searchVal);
     toggle(searchCount, !!searchVal);
   }));
 
   sub(subscribeAll(
-    { lines: filteredLines, search, activeChipTime, view },
-    ({ lines, search: searchVal, activeChipTime: activeTime, view: viewVal }) => {
+    { lines: filteredLines, search, view },
+    ({ lines, search: searchVal, view: viewVal }) => {
       if (viewVal === 'text' && searchVal) renderResults(results, lines, searchVal);
-      if (viewVal === 'chips') renderChips(chips, lines, searchVal, activeTime);
+      if (viewVal === 'chips') renderChips(chips, lines, searchVal, activeChipTime.get());
     }
   ));
+  sub(activeChipTime.subscribe((time) => {
+    for (const chip of chips.children) setAttr(chip, 'data-active', chip.dataset.seconds === String(time));
+  }));
 
   sub(matchCount.subscribe((val) => {
     searchCount.textContent = val;
@@ -304,7 +348,7 @@ function buildOutput() {
 // --- Footer: status + stats ---
 
 function buildFooter() {
-  const statusEl = el('div', { class: 'ytxt-status' });
+  const statusEl = el('div', { class: 'ytxt-status', role: 'status', 'aria-live': 'polite' });
   const statsEl = el('div', { class: 'ytxt-stats' });
   const footer = el('div', { class: 'ytxt-footer' }, [statusEl, statsEl]);
 
@@ -320,40 +364,6 @@ function buildFooter() {
 
 // --- Video sync: highlight the chip matching playback position ---
 
-function setupVideoSync(chipsContainer) {
-  boundVideo = document.querySelector('video');
-  if (!boundVideo) return;
-
-  videoHandler = () => {
-    if (view.get() !== 'chips') return;
-    const currentTime = boundVideo.currentTime;
-
-    let newActive = -1;
-    for (const line of filteredLines.get()) {
-      const s = parseTimestamp(line);
-      if (s !== null && s <= currentTime && s > newActive) newActive = s;
-    }
-
-    if (newActive !== activeChipTime.get()) {
-      activeChipTime.set(newActive);
-      later(() => {
-        const activeEl = chipsContainer.querySelector('.ytxt-chip[data-active]');
-        if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }, 0);
-    }
-  };
-
-  boundVideo.addEventListener('timeupdate', videoHandler);
-}
-
-function cleanupVideoSync() {
-  // Remove from the element we bound to — after SPA navigation
-  // document.querySelector('video') may resolve to a different element.
-  if (boundVideo && videoHandler) boundVideo.removeEventListener('timeupdate', videoHandler);
-  boundVideo = null;
-  videoHandler = null;
-}
-
 // --- Autoload: fetch as soon as a new video's tracks arrive ---
 
 function wireAutoload() {
@@ -367,6 +377,7 @@ function wireAutoload() {
 
 // --- Assembly ---
 
+/** WHAT: Builds the native-style transcript UI. WHY: Keeps each subscription and timer owned by one panel lifetime. */
 export function createPanel() {
   const isShorts = isShortsMode();
 
@@ -378,10 +389,18 @@ export function createPanel() {
 
   const body = el('div', { class: 'ytxt-body' }, [empty, controls, output.wrapper, footer]);
   const drawer = el('div', { class: 'ytxt-drawer' }, [headerRefs.header, body]);
-  const fab = el('button', { class: 'ytxt-fab', title: 'Transcript' }, Icon('transcript', 20));
+  const fab = el('button', {
+    class: 'ytxt-fab', type: 'button', title: 'Transcript', 'aria-label': 'Open transcript panel',
+  }, Icon('transcript', 20));
   const container = el('div', { class: 'ytxt-panel', id: 'ytxt-panel' }, [fab, drawer]);
 
   fab.addEventListener('click', () => drawerOpen.set(true));
+  container.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    if (isShortsMode()) { drawerOpen.set(false); fab.focus(); }
+    else { collapsed.set(true); headerRefs.chevron.focus(); }
+  });
 
   wireHeader(headerRefs);
   wireAutoload();
@@ -402,15 +421,16 @@ export function createPanel() {
     toggle(drawer, !isShortsMode() || open);
   }));
 
-  setupVideoSync(output.chips);
+  cleanupVideo = bindVideoSync(output.chips);
 
   return container;
 }
 
+/** WHAT: Turns panel subscriptions and timers. WHY: Keeps removed video pages from retaining UI effects. */
 export function destroyPanel() {
-  cleanupVideoSync();
+  cleanupVideo();
   unsubs.forEach((u) => u());
   unsubs = [];
   timers.forEach(clearTimeout);
-  timers = [];
+  timers.clear();
 }

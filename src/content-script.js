@@ -3,12 +3,12 @@
  * Minimal orchestration, UI logic in ui/
  */
 
-import { extractCaptionTracks } from './lib/youtube.js';
+import { extractCaptionTracks, getCurrentVideoId } from './lib/youtube.js';
 import { injectObserver, onHarvestEvent } from './lib/harvest.js';
 import { initPanel, removePanel, updateTracks, resetPlacement } from './ui/index.js';
 
 // Only run on YouTube
-if (!location.hostname.includes('youtube.com')) {
+if (location.hostname !== 'www.youtube.com') {
   throw new Error('Not YouTube');
 }
 
@@ -20,19 +20,30 @@ const isAdPlaying = () => {
 
 // Update captions from YouTube data
 const updateCaptions = () => {
+  if (!getCurrentVideoId()) return;
   const { tracks, videoId } = extractCaptionTracks();
   updateTracks(tracks, videoId);
 };
 
 // Handle navigation
+let refreshTimer;
+let navigation = 0;
 const onNavigate = () => {
+  clearTimeout(refreshTimer);
+  const token = ++navigation;
+  adObserver.disconnect();
   removePanel();
   resetPlacement();
+  if (!getCurrentVideoId()) return;
   initPanel();
-  setTimeout(() => {
+  let attempts = 0;
+  const refresh = () => {
+    if (token !== navigation) return;
     updateCaptions();
     startAdObserver();
-  }, 1000);
+    if (++attempts < 8) refreshTimer = setTimeout(refresh, 750);
+  };
+  refresh();
 };
 
 // Watch for ads
@@ -63,11 +74,7 @@ const init = () => {
   window.addEventListener('yt-navigate-finish', onNavigate);
   window.addEventListener('yt-page-data-updated', updateCaptions);
 
-  initPanel();
-  setTimeout(() => {
-    updateCaptions();
-    startAdObserver();
-  }, 1000);
+  onNavigate();
 };
 
 // Run when DOM is ready (handles document_start timing)

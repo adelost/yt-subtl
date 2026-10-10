@@ -3,14 +3,19 @@
 import { msToTimestamp } from './helpers.js';
 
 const decodeEntities = (text) => String(text || '')
-  .replace(/&amp;/g, '&')
   .replace(/&lt;/g, '<')
   .replace(/&gt;/g, '>')
   .replace(/&quot;/g, '"')
-  .replace(/&#39;|&apos;/g, "'");
+  .replace(/&#39;|&apos;/g, "'")
+  .replace(/&nbsp;/g, ' ')
+  .replace(/&#(x[0-9a-f]+|\d+);/gi, (entity, code) => {
+    const value = code[0].toLowerCase() === 'x' ? parseInt(code.slice(1), 16) : Number(code);
+    return value <= 0x10ffff ? String.fromCodePoint(value) : entity;
+  })
+  .replace(/&amp;/g, '&');
 
-export const normalizeCaptionText = (text) => decodeEntities(text)
-  .replace(/<[^>]*>/g, '')
+/** WHAT: Normalizes caption markup and decode entities once. WHY: Keeps encoded spoken text from being stripped as markup. */
+export const normalizeCaptionText = (text) => decodeEntities(String(text || '').replace(/<[^>]*>/g, ''))
   .replace(/\s*\n+\s*/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();
@@ -27,10 +32,11 @@ export const json3ToText = (json, withTS) => {
     .join('\n');
 };
 
+/** WHAT: Reads timed WebVTT cues. WHY: Keeps identifiers and metadata distinct from spoken numeric text. */
 export const vttToText = (vtt, withTS) => {
   const lines = vtt.split(/\r?\n/);
   const out = [];
-  let bucket = [], ts = null;
+  let bucket = [], ts = null, inHeader = true, skipBlock = false;
   const timeRe = /(\d{2}:)?\d{2}:\d{2}\.\d{3}\s*-->\s*/;
   const flush = () => {
     if (!bucket.length) return;
@@ -42,27 +48,40 @@ export const vttToText = (vtt, withTS) => {
 
   for (const raw of lines) {
     const line = raw.trim();
-    if (!line || line.startsWith('WEBVTT') || /^\d+$/.test(line)) {
+    if (!line) {
       flush();
+      inHeader = false;
+      skipBlock = false;
       continue;
     }
+    if (inHeader && (line.startsWith('WEBVTT') || /^(Kind|Language):/i.test(line))) continue;
+    if (/^(NOTE|STYLE|REGION)(?:\s|$)/.test(line)) {
+      flush();
+      skipBlock = true;
+      continue;
+    }
+    if (skipBlock) continue;
     if (timeRe.test(line)) {
+      flush();
       ts = line.split('-->')[0].trim().replace(/\.\d+$/, '');
       continue;
     }
+    if (!ts) continue; // Cue identifiers belong before, never inside, a timed cue.
     bucket.push(line);
   }
   flush();
   return out.join('\n');
 };
 
+/** WHAT: Reads legacy and srv3 caption XML. WHY: Keeps millisecond and second timestamp units explicit. */
 export const xmlToText = (xmlString, withTS) => {
   try {
     const doc = new DOMParser().parseFromString(xmlString, 'text/xml');
-    const nodes = Array.from(doc.getElementsByTagName('text'));
+    if (doc.querySelector('parsererror')) return '';
+    const nodes = Array.from(doc.querySelectorAll('text, body > p'));
     return nodes
       .map(n => {
-        const raw = normalizeCaptionText(n.textContent || '');
+        const raw = decodeEntities(n.textContent || '').replace(/\s+/g, ' ').trim();
         if (!raw) return null;
         if (!withTS) return raw;
         // YouTube XML provides either `start` (in seconds) or `t` (in milliseconds)
@@ -133,40 +152,31 @@ const toMs = (txt) => {
   return Math.round(s * 1000);
 };
 
+/** WHAT: Extracts ordered cues from YouTubeI renderer shapes. WHY: Keeps traversal order from reversing the transcript. */
 export const parseYouTubeITranscript = (data, withTS) => {
   try {
     if (!data) return '';
     // Traverse to find any cue groups
-    const groups = [];
+    const cues = [];
     const stack = [data];
     while (stack.length) {
       const node = stack.pop();
       if (!node) continue;
-      if (Array.isArray(node)) { stack.push(...node); continue; }
+      if (Array.isArray(node)) { stack.push(...node.slice().reverse()); continue; }
       if (typeof node === 'object') {
-        if (node.transcriptCueGroupRenderer) {
-          groups.push(node.transcriptCueGroupRenderer);
+        const group = node.transcriptCueGroupRenderer;
+        const cue = node.transcriptSegmentRenderer || group?.cue?.transcriptCueRenderer || group?.transcriptCueRenderer || group?.cue;
+        if (cue) {
+          const text = normalizeCaptionText(extractCueText(cue.snippet || cue.cue || cue.text || cue));
+          const timestamp = cue.startTimeText?.simpleText || group?.formattedStartTime?.simpleText;
+          if (text) cues.push({ text, ms: timestamp ? toMs(timestamp) : Number(cue.startMs ?? cue.startOffsetMs ?? 0) });
+          continue;
         }
-        for (const k in node) stack.push(node[k]);
+        stack.push(...Object.values(node).reverse());
       }
     }
-    if (!groups.length) return '';
-
-    const lines = [];
-    for (const g of groups) {
-      const cueR = g.cue?.transcriptCueRenderer || g.transcriptCueRenderer || null;
-      const cueObj = cueR || g.cue;
-      const text = normalizeCaptionText(extractCueText(cueObj?.cue || cueObj?.text || cueObj));
-      if (!text) continue;
-      if (withTS) {
-        const ts = cueObj?.startTimeText?.simpleText || g.formattedStartTime?.simpleText || null;
-        const ms = ts ? toMs(ts) : Number(cueObj?.startOffsetMs) || 0;
-        lines.push(`[${msToTimestamp(ms)}] ${text}`);
-      } else {
-        lines.push(text);
-      }
-    }
-    return lines.join('\n');
+    return cues.sort((a, b) => a.ms - b.ms)
+      .map(({ ms, text }) => withTS ? `[${msToTimestamp(ms)}] ${text}` : text).join('\n');
   } catch {
     return '';
   }

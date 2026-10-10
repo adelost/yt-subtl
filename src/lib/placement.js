@@ -16,10 +16,9 @@ const debounce = (fn, ms) => {
   };
 };
 
-// Detect if we're on a Shorts page
+/** WHAT: Checks the current Shorts route. WHY: Keeps old retained Shorts DOM from choosing the wrong layout. */
 export const isShorts = () => {
-  return location.pathname.startsWith('/shorts/') ||
-         !!document.querySelector('ytd-shorts');
+  return location.pathname.startsWith('/shorts/');
 };
 
 // Detect if sidebar is visible
@@ -126,7 +125,7 @@ export const attachPanel = (panel) => {
   }
 };
 
-// Start observing for layout changes
+/** WHAT: Maps the panel when YouTube changes layout. WHY: Keeps late-created page containers from stranding the panel. */
 export const startObserving = (panel) => {
   if (!panel) return;
 
@@ -147,7 +146,7 @@ export const startObserving = (panel) => {
 
   mutationObserver = new MutationObserver(resizeHandler);
 
-  const columns = document.querySelector('#columns');
+  const columns = document.querySelector('#columns') || document.body;
   if (columns) {
     mutationObserver.observe(columns, {
       childList: true,

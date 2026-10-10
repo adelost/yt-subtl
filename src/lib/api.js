@@ -2,13 +2,15 @@
  * API/fetch utilities
  */
 
+/** WHAT: Fetches a bounded same-origin caption response. WHY: Keeps blocked requests from hanging the UI forever. */
 export const fetchCaption = async (url) => {
   // Fetch directly from MAIN world - we have access to YouTube's cookies here
   try {
     const res = await fetch(url, {
       credentials: 'include',
       // Use same-origin semantics; YouTube may reject CORS-mode requests
-      mode: 'same-origin'
+      mode: 'same-origin',
+      signal: AbortSignal.timeout(8000)
     });
 
     const contentType = res.headers.get('content-type') || 'unknown';
@@ -77,6 +79,7 @@ export const fetchCaption = async (url) => {
             xhr.open('GET', url, true);
             xhr.responseType = 'text';
             xhr.withCredentials = true;
+            xhr.timeout = 8000;
             xhr.setRequestHeader('Accept', '*/*');
             xhr.onload = () => {
               if (xhr.status >= 200 && xhr.status < 300) {
@@ -85,6 +88,7 @@ export const fetchCaption = async (url) => {
               else reject(new Error(`XHR status ${xhr.status}`));
             };
             xhr.onerror = () => reject(new Error('XHR network error'));
+            xhr.ontimeout = () => reject(new Error('Caption request timed out'));
             xhr.send();
           } catch (e) { reject(e); }
         });
@@ -123,7 +127,7 @@ export const fetchCaption = async (url) => {
   }
 };
 
-// Fetch YouTubeI get_transcript JSON using the track's params
+/** WHAT: Fetches YouTubeI JSON with this track's params. WHY: Keeps request context bound to the current page. */
 export const fetchYTTranscript = async (params) => {
   try {
     const ytcfg = window.ytcfg?.get ? window.ytcfg : null;
@@ -152,6 +156,7 @@ export const fetchYTTranscript = async (params) => {
       method: 'POST',
       credentials: 'include',
       mode: 'same-origin',
+      signal: AbortSignal.timeout(8000),
       headers: {
         'content-type': 'application/json',
         'x-youtube-client-name': String(clientName),

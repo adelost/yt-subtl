@@ -53,12 +53,12 @@ export const getContent = (line) => {
   return line.replace(/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, '');
 };
 
-// Seek video to time
+/** WHAT: Maps the page video to a caption. WHY: Keeps timestamp parsing separate from player effects. */
 export const seekVideo = (seconds) => {
   const video = document.querySelector('video');
   if (video && seconds !== null) {
     video.currentTime = seconds;
-    if (video.paused) video.play();
+    if (video.paused) void video.play().catch(() => {});
   }
 };
 
@@ -72,7 +72,7 @@ export const copyToClipboard = async (text) => {
   }
 };
 
-// Download text as file
+/** WHAT: Dispatches a UTF-8 text download. WHY: Keeps object URL lifetime long enough for Chromium to consume it. */
 export const downloadText = (text, filename) => {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -80,10 +80,11 @@ export const downloadText = (text, filename) => {
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can race the download in Chromium.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-// Storage helpers
+/** WHAT: Reads and save display preferences. WHY: Keeps unavailable storage from preventing transcript use. */
 export const storage = {
   get: (key, defaultValue = null) => {
     try {
@@ -99,9 +100,16 @@ export const storage = {
     } catch {}
   },
   getBool: (key, defaultValue = false) => {
-    return localStorage.getItem(key) === 'true' || (localStorage.getItem(key) === null && defaultValue);
+    try {
+      const value = localStorage.getItem(key);
+      return value === 'true' || (value === null && defaultValue);
+    } catch {
+      return defaultValue;
+    }
   },
   setBool: (key, value) => {
-    localStorage.setItem(key, value ? 'true' : 'false');
+    try {
+      localStorage.setItem(key, value ? 'true' : 'false');
+    } catch {}
   },
 };

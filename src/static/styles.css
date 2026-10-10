@@ -1,27 +1,47 @@
 /* YouTube Transcript Reader - native YouTube look.
  *
- * Design contract: the panel must read as a built-in YouTube module, not a
- * third-party app. All colors come from YouTube's own design tokens
- * (--yt-spec-*) so the panel follows YouTube's light/dark theme exactly.
- * Fallback values assume dark theme (the tokens exist on any modern YouTube).
- * Single accent = YouTube's own link blue, used only for timestamps,
- * active states, and transient feedback. No gradients, no brand colors.
+ * Do not consume YouTube's private --yt-spec-* color variables here. Their
+ * meaning and scope changes independently of the page background; this has
+ * produced white text on a white panel in the wild. These small palettes are
+ * deliberately owned by the extension and switch on YouTube's stable `dark`
+ * attribute instead.
  */
 
 .ytxt-panel {
-  --ytxt-text: var(--yt-spec-text-primary, #f1f1f1);
-  --ytxt-text-dim: var(--yt-spec-text-secondary, #aaa);
-  --ytxt-surface: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1));
-  --ytxt-surface-hover: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.2));
-  --ytxt-accent: var(--yt-spec-call-to-action, #3ea6ff);
-  --ytxt-outline: rgba(128, 128, 128, 0.25);
+  --ytxt-panel-bg: #fff;
+  --ytxt-text: #0f0f0f;
+  --ytxt-text-dim: #606060;
+  --ytxt-surface: #f2f2f2;
+  --ytxt-surface-hover: #e5e5e5;
+  --ytxt-accent: #065fd4;
+  --ytxt-outline: #d9d9d9;
+  --ytxt-error: #b3261e;
+  --ytxt-focus: #065fd4;
   --ytxt-radius: 12px;
 
+  color-scheme: light;
   font-family: "Roboto", "Arial", sans-serif;
   font-size: 1.4rem;
   line-height: 2rem;
   color: var(--ytxt-text);
 }
+
+html[dark] .ytxt-panel,
+ytd-app[dark] .ytxt-panel {
+  --ytxt-panel-bg: #212121;
+  --ytxt-text: #f1f1f1;
+  --ytxt-text-dim: #aaa;
+  --ytxt-surface: #3f3f3f;
+  --ytxt-surface-hover: #535353;
+  --ytxt-accent: #3ea6ff;
+  --ytxt-outline: #555;
+  --ytxt-error: #ff8a80;
+  --ytxt-focus: #3ea6ff;
+  color-scheme: dark;
+}
+
+.ytxt-panel,
+.ytxt-panel * { box-sizing: border-box; }
 
 .ytxt-mode-sidebar { margin-bottom: 8px; }
 .ytxt-mode-inline { width: 100%; margin: 8px 0 16px; }
@@ -35,14 +55,18 @@
 
 /* === Drawer (the module box) === */
 .ytxt-drawer {
-  background: var(--ytxt-surface);
+  background: var(--ytxt-panel-bg);
+  border: 1px solid var(--ytxt-outline);
   border-radius: var(--ytxt-radius);
   overflow: hidden;
 }
 
 /* Collapsed = ghost mode: no fill, dim text, near-zero visual weight.
  * Hover restores the chip surface so it still reads as clickable. */
-.ytxt-panel[data-collapsed] .ytxt-drawer { background: transparent; }
+.ytxt-panel[data-collapsed] .ytxt-drawer {
+  background: transparent;
+  border-color: transparent;
+}
 .ytxt-panel[data-collapsed] .ytxt-header { min-height: 36px; }
 .ytxt-panel[data-collapsed] .ytxt-title { color: var(--ytxt-text-dim); }
 .ytxt-panel[data-collapsed] .ytxt-drawer:hover .ytxt-title { color: var(--ytxt-text); }
@@ -70,6 +94,13 @@
   font-weight: 500;
   flex: 1;
   min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
 }
 
 .ytxt-title svg { color: var(--ytxt-text-dim); flex-shrink: 0; }
@@ -104,12 +135,28 @@
   color: var(--ytxt-text-dim);
   cursor: pointer;
   padding: 0;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .ytxt-icon-btn:hover { background: var(--ytxt-surface-hover); color: var(--ytxt-text); }
 .ytxt-icon-btn[data-active] { color: var(--ytxt-accent); }
 .ytxt-icon-btn[disabled] { opacity: 0.4; cursor: default; }
 .ytxt-icon-btn[disabled]:hover { background: transparent; color: var(--ytxt-text-dim); }
+
+.ytxt-icon-btn:focus-visible,
+.ytxt-title:focus-visible,
+.ytxt-btn:focus-visible,
+.ytxt-select:focus-visible,
+.ytxt-search:focus-visible,
+.ytxt-output:focus-visible,
+.ytxt-result-line:focus-visible,
+.ytxt-chip:focus-visible,
+.ytxt-fab:focus-visible,
+.ytxt-toggle:has(input:focus-visible) {
+  outline: 2px solid var(--ytxt-focus);
+  outline-offset: 2px;
+}
 
 .ytxt-chevron svg { transition: transform 0.2s ease; }
 .ytxt-panel:not([data-collapsed]) .ytxt-chevron svg { transform: rotate(180deg); }
@@ -129,42 +176,43 @@
 }
 
 /* === Controls row: track select + fetch === */
-.ytxt-controls { display: flex; gap: 8px; margin-bottom: 8px; }
+.ytxt-controls { display: flex; gap: 10px; margin-bottom: 12px; }
 
 .ytxt-select {
   flex: 1;
   min-width: 0;
-  height: 36px;
-  padding: 0 10px;
+  height: 44px;
+  padding: 0 40px 0 16px;
   border: none;
   border-radius: 18px;
   background: var(--ytxt-surface);
   color: var(--ytxt-text);
   font: inherit;
-  font-size: 1.3rem;
+  font-size: 1.4rem;
   cursor: pointer;
   outline: none;
 }
 
 .ytxt-select:hover { background: var(--ytxt-surface-hover); }
-.ytxt-select option { background: #212121; color: #f1f1f1; }
+.ytxt-select option { background: var(--ytxt-panel-bg); color: var(--ytxt-text); }
 
 .ytxt-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 36px;
-  padding: 0 16px;
+  height: 44px;
+  padding: 0 20px;
   border: none;
   border-radius: 18px;
   background: var(--ytxt-surface);
   color: var(--ytxt-text);
   font: inherit;
-  font-size: 1.3rem;
+  font-size: 1.4rem;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .ytxt-btn:hover { background: var(--ytxt-surface-hover); }
@@ -198,6 +246,8 @@
   resize: vertical;
   outline: none;
   box-sizing: border-box;
+  -webkit-text-fill-color: var(--ytxt-text);
+  opacity: 1;
 }
 
 /* Search results + chips share the scroll area look */
@@ -207,6 +257,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  scroll-padding-top: 6px;
 }
 
 .ytxt-result-line,
@@ -224,6 +275,7 @@
   line-height: 1.9rem;
   text-align: left;
   cursor: pointer;
+  appearance: none;
 }
 
 .ytxt-result-line:hover,
@@ -241,7 +293,12 @@
 
 .ytxt-chip[data-active] {
   background: var(--ytxt-surface);
-  box-shadow: inset 2px 0 0 var(--ytxt-accent);
+}
+
+@media (max-width: 520px) {
+  .ytxt-controls { flex-wrap: wrap; }
+  .ytxt-select { flex-basis: 100%; }
+  .ytxt-controls .ytxt-btn { width: 100%; }
 }
 
 .ytxt-no-results {
@@ -290,6 +347,7 @@ mark.ytxt-highlight {
 }
 
 .ytxt-search::placeholder { color: var(--ytxt-text-dim); }
+.ytxt-search::-webkit-search-cancel-button { display: none; }
 
 .ytxt-search-count {
   font-size: 1.2rem;
@@ -312,7 +370,7 @@ mark.ytxt-highlight {
   color: var(--ytxt-text-dim);
 }
 
-.ytxt-status[data-type="error"] { color: var(--yt-spec-error-indicator, #f28b82); }
+.ytxt-status[data-type="error"] { color: var(--ytxt-error); }
 .ytxt-status[data-type="ok"] { color: var(--ytxt-accent); }
 
 /* === FAB mode (Shorts) === */
@@ -342,7 +400,7 @@ mark.ytxt-highlight {
   width: min(400px, calc(100vw - 32px));
   max-height: 70vh;
   overflow-y: auto;
-  background: var(--yt-spec-menu-background, #282828);
+  background: var(--ytxt-panel-bg);
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.5);
   z-index: 10001;
 }

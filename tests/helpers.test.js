@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { msToTimestamp } from '../src/lib/helpers.js';
+import { choosePlayerResponse } from '../src/lib/youtube.js';
 
 describe('msToTimestamp', () => {
   it('should convert milliseconds to HH:MM:SS format', () => {
@@ -28,5 +29,19 @@ describe('msToTimestamp', () => {
     assert.strictEqual(msToTimestamp(null), '00:00');
     assert.strictEqual(msToTimestamp(undefined), '00:00');
     assert.strictEqual(msToTimestamp('invalid'), '00:00');
+  });
+});
+
+describe('choosePlayerResponse', () => {
+  const response = (videoId) => ({ videoDetails: { videoId } });
+
+  it('uses the live response matching the current SPA video', () => {
+    const oldInitial = response('old');
+    const live = response('new');
+    assert.strictEqual(choosePlayerResponse([live, oldInitial], 'new'), live);
+  });
+
+  it('does not reuse stale tracks while the new player response is pending', () => {
+    assert.strictEqual(choosePlayerResponse([response('old')], 'new'), null);
   });
 });

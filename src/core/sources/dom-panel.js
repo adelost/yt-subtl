@@ -1,4 +1,5 @@
 import { reportStatus } from '../../shared/status-bus.js';
+import { extractCaptionTracks, getCurrentVideoId } from '../../lib/youtube.js';
 
 const waitForEl = (sel, timeout = 2000) => new Promise((resolve) => {
   const el = document.querySelector(sel);
@@ -55,8 +56,12 @@ const scrapeTranscript = (withTS) => {
   } catch { return ''; }
 };
 
-export const tryDomPanel = async (_track, _videoId, withTS) => {
+/** WHAT: Reads a verified single-track native panel. WHY: Keeps unknown DOM language from being mislabeled. */
+export const tryDomPanel = async (track, videoId, withTS) => {
   try {
+    const current = extractCaptionTracks();
+    // Without a verified DOM language identity, never relabel another track.
+    if (getCurrentVideoId() !== videoId || current.tracks?.length !== 1 || current.tracks[0].languageCode !== track.languageCode || current.tracks[0].kind !== track.kind) return { ok: false };
     // If already open, scrape directly
     let first = scrapeTranscript(withTS);
     let text = typeof first === 'string' ? first : (first?.text || '');
@@ -68,6 +73,7 @@ export const tryDomPanel = async (_track, _videoId, withTS) => {
     // Try to open the panel quietly and scrape
     reportStatus('Opening transcript panel…');
     await openTranscriptPanel();
+    if (getCurrentVideoId() !== videoId) return { ok: false };
     const second = scrapeTranscript(withTS);
     text = typeof second === 'string' ? second : (second?.text || '');
     const count2 = typeof second === 'object' && second ? second.count : undefined;

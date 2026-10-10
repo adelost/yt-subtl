@@ -130,6 +130,18 @@ export const setAttr = (el, key, value) => {
   else el?.setAttribute(key, value);
 };
 
+/** WHAT: Maps a cue within its viewport. WHY: Keeps transcript tracking from moving the surrounding YouTube page. */
+export const scrollChildToTop = (container, child, offset = 0, behavior = 'smooth') => {
+  if (!container?.getBoundingClientRect || !child?.getBoundingClientRect || !container?.scrollTo) {
+    return false;
+  }
+  const containerRect = container.getBoundingClientRect();
+  const childRect = child.getBoundingClientRect();
+  const top = container.scrollTop + childRect.top - containerRect.top - offset;
+  container.scrollTo({ top: Math.max(0, top), behavior });
+  return true;
+};
+
 // Create highlighted text fragments (CSP-safe alternative to innerHTML)
 export const highlightedText = (text, query, markClass = 'ytxt-highlight') => {
   if (!query || !text) {

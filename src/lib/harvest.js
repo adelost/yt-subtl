@@ -13,8 +13,10 @@ const keyForTrack = (track) => {
 
 export const getTemplatesFor = (videoId) => store.get(videoId) || null;
 
+/** WHAT: Stores the current video's observed captions. WHY: Keeps YouTube request tokens and bodies scoped to a video. */
 export const onHarvestEvent = (detail) => {
   try {
+    if (!detail) return;
     const { kind, url, params = {}, videoId, contentType = '', size = 0, body = '' } = detail || {};
     if (!videoId && params && typeof params.v === 'string') {
       // derive v from query if not provided
@@ -22,6 +24,7 @@ export const onHarvestEvent = (detail) => {
     }
     const vid = detail.videoId;
     if (!vid) return;
+    if (!store.has(vid) && store.size >= 10) store.delete(store.keys().next().value);
     const bucket = store.get(vid) || { tt: { byKey: new Map() } };
 
     if (kind === 'youtubei') {
@@ -85,7 +88,6 @@ export const nudgeForTrack = async (track) => {
 export const awaitTemplateForTrack = async (videoId, track, timeoutMs = 2500) => {
   const existing = store.get(videoId);
   const tKey = keyForTrack(track);
-  if (existing?.yti?.params) return { kind: 'youtubei', data: existing.yti };
   const ttEntry = existing?.tt?.byKey?.get(tKey) || null;
   if (ttEntry) return { kind: 'timedtext', data: ttEntry };
 
@@ -95,14 +97,6 @@ export const awaitTemplateForTrack = async (videoId, track, timeoutMs = 2500) =>
     try {
       const d = e?.detail || {};
       if (!d) return;
-      if (d.kind === 'youtubei') {
-        if (d.videoId === videoId && d.reqParams) {
-          onHarvestEvent(d);
-          result = { kind: 'youtubei', data: { params: d.reqParams } };
-          done = true;
-        }
-        return;
-      }
       if (d.kind === 'timedtext') {
         if (d.videoId === videoId) {
           onHarvestEvent(d);
@@ -133,7 +127,7 @@ export const awaitTemplateForTrack = async (videoId, track, timeoutMs = 2500) =>
   return result;
 };
 
-// Since we run in MAIN world, we can install the observer directly (no script injection needed)
+/** WHAT: Tracks successful YouTube caption responses once. WHY: Keeps duplicate network wrappers out of the page. */
 export const injectObserver = () => {
   try {
     if (window.__ytxtObserverInstalled) return;
@@ -144,7 +138,7 @@ export const injectObserver = () => {
 
     const harvest = async (reqUrl, res, reqBody) => {
       try {
-        const u = toURL(String(reqUrl || '')); if (!u) return;
+        const u = toURL(reqUrl instanceof Request ? reqUrl.url : String(reqUrl || '')); if (!u || u.origin !== location.origin) return;
         const path = u.pathname || '';
         const isTT = path.includes('/api/timedtext');
         const isYTI = path.includes('/youtubei/') && path.includes('/get_transcript');
@@ -176,7 +170,7 @@ export const injectObserver = () => {
         try { body = JSON.stringify(body); } catch {}
       }
       const p = originalFetch(input, init);
-      p.then(res => { try { harvest(input, res, body); } catch {} });
+      p.then(res => harvest(input, res, body), () => {});
       return p;
     };
 

@@ -24,12 +24,13 @@ const buildFallbackUrl = (track, videoId, fmt) => {
   } catch { return null; }
 };
 
+/** WHAT: Fetches YouTube caption formats for this track. WHY: Keeps transport variations out of the caption parser. */
 export const tryTimedtextDirect = async (track, videoId, withTS) => {
   const formats = [ { label:'raw', fmt:null }, { label:'json3', fmt:'json3' }, { label:'srv3', fmt:'srv3' }, { label:'vtt', fmt:'vtt' } ];
   for (const { label, fmt } of formats) {
     try {
-      let urlStr = track.baseUrl;
-      if (fmt) {
+      let urlStr = typeof track?.baseUrl === 'string' ? track.baseUrl.trim() : '';
+      if (urlStr && fmt) {
         const hasFmt = /([?&])fmt=/.test(urlStr);
         if (hasFmt) urlStr = urlStr.replace(/([?&])fmt=[^&#]*/g, `$1fmt=${encodeURIComponent(fmt)}`);
         else urlStr = urlStr + (urlStr.includes('?') ? '&' : '?') + `fmt=${encodeURIComponent(fmt)}`;
@@ -39,11 +40,12 @@ export const tryTimedtextDirect = async (track, videoId, withTS) => {
           }
         }
       }
-      const candidates = [urlStr];
+      const candidates = [];
+      if (urlStr) candidates.push(urlStr);
       const fb = buildFallbackUrl(track, videoId, fmt || (label==='raw'?null:undefined));
       if (fb) candidates.push(fb);
 
-      for (const c of candidates) {
+      for (const c of new Set(candidates)) {
         reportStatus(`Trying ${label}${c!==urlStr?' (fallback)':''}…`);
         const resp = await fetchCaption(c);
         if (!resp?.ok) continue;
