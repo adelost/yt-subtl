@@ -221,7 +221,9 @@ function renderResults(container, linesArr, searchVal) {
   }
   for (const line of linesArr) {
     const btn = el('button', { class: 'ytxt-result-line', type: 'button' });
-    btn.appendChild(highlightedText(line, searchVal));
+    const content = el('span');
+    content.appendChild(highlightedText(line, searchVal));
+    btn.appendChild(content);
     btn.addEventListener('click', () => seekToLine(line));
     container.appendChild(btn);
   }

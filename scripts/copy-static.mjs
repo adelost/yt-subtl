@@ -13,7 +13,4 @@ for (const file of readdirSync(staticDir)) {
   copyFileSync(join(staticDir, file), join(dist, file));
 }
 
-// bridge.js is page-injected as-is (no bundling), colocated with src/.
-copyFileSync(join(root, 'src', 'bridge.js'), join(dist, 'bridge.js'));
-
 console.log('copied static extension files -> dist/');

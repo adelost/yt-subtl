@@ -165,10 +165,10 @@ export const parseYouTubeITranscript = (data, withTS) => {
       if (Array.isArray(node)) { stack.push(...node.slice().reverse()); continue; }
       if (typeof node === 'object') {
         const group = node.transcriptCueGroupRenderer;
-        const cue = node.transcriptSegmentRenderer || group?.cue?.transcriptCueRenderer || group?.transcriptCueRenderer || group?.cue;
+        const cue = node.transcriptSegmentViewModel || node.transcriptSegmentRenderer || group?.cue?.transcriptCueRenderer || group?.transcriptCueRenderer || group?.cue;
         if (cue) {
           const text = normalizeCaptionText(extractCueText(cue.snippet || cue.cue || cue.text || cue));
-          const timestamp = cue.startTimeText?.simpleText || group?.formattedStartTime?.simpleText;
+          const timestamp = cue.timestamp || cue.startTimeText?.simpleText || group?.formattedStartTime?.simpleText;
           if (text) cues.push({ text, ms: timestamp ? toMs(timestamp) : Number(cue.startMs ?? cue.startOffsetMs ?? 0) });
           continue;
         }

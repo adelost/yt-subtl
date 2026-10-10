@@ -72,14 +72,14 @@ const getShortsContainer = () => {
   return document.body;
 };
 
-// Attach panel to the appropriate location
+/** WHAT: Maps the panel into the current YouTube layout. WHY: Keeps replaced sidebar nodes from trapping a detached panel. */
 export const attachPanel = (panel) => {
   if (!panel) return;
 
   const mode = detectMode();
 
   // Already in correct mode and attached
-  if (currentMode === mode && panel.parentNode) return;
+  if (currentMode === mode && panel.isConnected) return;
 
   // Remove old mode classes
   panel.classList.remove('ytxt-mode-sidebar', 'ytxt-mode-inline', 'ytxt-floating', 'ytxt-mode-fab');

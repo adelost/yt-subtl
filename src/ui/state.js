@@ -56,8 +56,9 @@ export const matchCount = derived([search, filteredLines], ([s, f]) =>
   s ? f.length : 0
 );
 
+/** WHAT: Calculates cue and spoken-word counts. WHY: Keeps timestamp labels out of the word total. */
 export const stats = derived([transcript, lines], ([t, l]) =>
-  t ? `${l.length} lines · ${t.split(/\s+/).filter(Boolean).length} words` : ''
+  t ? `${l.length} lines · ${l.map(getContent).join(' ').split(/\s+/).filter(Boolean).length} words` : ''
 );
 
 // Helpers

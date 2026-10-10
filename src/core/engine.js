@@ -1,4 +1,5 @@
 import { reportStatus } from '../shared/status-bus.js';
+import { tryPageData } from './sources/page-data.js';
 import { tryYouTubeI } from './sources/youtubei.js';
 import { tryDomPanel } from './sources/dom-panel.js';
 import { tryTimedtextHarvest } from './sources/timedtext-harvest.js';
@@ -8,6 +9,7 @@ import { tryTimedtextDirect } from './sources/timedtext-direct.js';
 export const fetchTranscript = async (track, videoId, withTS) => {
   // Track-bound sources first; an open DOM panel may be on another language.
   const steps = [
+    { name: 'Page transcript', fn: tryPageData },
     { name: 'YouTubeI', fn: tryYouTubeI },
     { name: 'Timedtext (harvest)', fn: tryTimedtextHarvest },
     { name: 'Timedtext (direct)', fn: tryTimedtextDirect },
@@ -27,5 +29,5 @@ export const fetchTranscript = async (track, videoId, withTS) => {
       }
     } catch {}
   }
-  throw new Error('Transcript not available via YouTubeI, panel, or timedtext');
+  throw new Error('Could not load this caption track. Try another language or reload YouTube.');
 };

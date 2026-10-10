@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Transcript theme harness</title>
+  <link rel="stylesheet" href="../src/static/styles.css">
+  <style>
+    html { font-size: 10px; }
+    body {
+      /* Reproduce the bad upstream-token combination from the reported page. */
+      --yt-spec-text-primary: #f1f1f1;
+      --yt-spec-badge-chip-background: transparent;
+      margin: 0;
+      padding: 32px;
+      background: #fff;
+      font-family: Arial, sans-serif;
+    }
+    html[dark] body { background: #0f0f0f; }
+    .fixture { width: 760px; }
+  </style>
+  <script>
+    if (new URLSearchParams(location.search).has('dark')) {
+      document.documentElement.setAttribute('dark', '');
+    }
+  </script>
+</head>
+<body>
+  <main class="fixture">
+    <div class="ytxt-panel ytxt-mode-inline" id="ytxt-panel">
+      <div class="ytxt-drawer">
+        <div class="ytxt-header">
+          <div class="ytxt-title"><span aria-hidden="true">☰</span><span>Transcript</span></div>
+          <div class="ytxt-tools">
+            <button class="ytxt-icon-btn" type="button" aria-label="Copy transcript">▣</button>
+            <button class="ytxt-icon-btn ytxt-chevron" type="button" aria-label="Collapse">▲</button>
+          </div>
+        </div>
+        <div class="ytxt-body">
+          <div class="ytxt-controls">
+            <select class="ytxt-select" aria-label="Caption track"><option>English (auto-generated)</option></select>
+            <button class="ytxt-btn" type="button">Get transcript</button>
+          </div>
+          <div class="ytxt-output-wrapper">
+            <div class="ytxt-toolbar">
+              <div class="ytxt-search-wrapper"><span aria-hidden="true">⌕</span><input class="ytxt-search" placeholder="Search…"></div>
+            </div>
+            <div class="ytxt-chips">
+              <button class="ytxt-chip" type="button" data-active><span class="time">00:00</span><span class="text">Today we're turning a simple texture into a detailed map.</span></button>
+              <button class="ytxt-chip" type="button"><span class="time">00:04</span><span class="text">Every line must remain readable in both themes.</span></button>
+            </div>
+          </div>
+          <div class="ytxt-footer"><span class="ytxt-status" data-type="ok">Loaded: en (auto)</span><span>2 lines · 18 words</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
