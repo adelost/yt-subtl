@@ -1,202 +1,85 @@
-// Harvest successful transcript requests made by the YouTube page itself
-// Stores per-video templates for:
-// - YouTubeI get_transcript (preferred)
-// - timedtext with pot/potc (+ device hints)
+// Caption responses fetched by YouTube's own player, kept per video and track.
+// Only the player's requests carry the token YouTube requires, so these are the
+// caption bytes the extension reads.
 
-const store = new Map(); // videoId -> { yti?: { params }, tt?: { byKey: Map<string, Entry> } }
+const MAX_VIDEOS = 10;
+const store = new Map(); // videoId -> Map<captionKey, { url, contentType, body }>
+const waiters = new Set();
 
-const keyForTrack = (track) => {
-  const lang = track?.languageCode || '';
-  const kind = track?.kind || '';
-  return `${lang}|${kind || 'manual'}`;
+/** WHAT: Names one caption track of a video. WHY: Keeps manual and auto-generated captions of one language apart. */
+export const captionKey = (languageCode, kind) => `${languageCode || ''}|${kind === 'asr' ? 'asr' : 'manual'}`;
+
+/** WHAT: Reads which video and track a timedtext URL answers. WHY: Keeps translations and other videos' captions out of the store. */
+export const describeCaptionUrl = (href) => {
+  let url;
+  try { url = new URL(href, 'https://www.youtube.com'); } catch { return null; }
+  if (!url.pathname.includes('/api/timedtext')) return null;
+  const params = url.searchParams;
+  if (!params.get('v') || !params.get('lang') || params.get('tlang')) return null;
+  return { videoId: params.get('v'), key: captionKey(params.get('lang'), params.get('kind')) };
 };
 
-export const getTemplatesFor = (videoId) => store.get(videoId) || null;
-
-/** WHAT: Stores the current video's observed captions. WHY: Keeps YouTube request tokens and bodies scoped to a video. */
+/** WHAT: Stores a caption response the player fetched. WHY: Keeps a later request for the same track instant. */
 export const onHarvestEvent = (detail) => {
-  try {
-    if (!detail) return;
-    const { kind, url, params = {}, videoId, contentType = '', size = 0, body = '' } = detail || {};
-    if (!videoId && params && typeof params.v === 'string') {
-      // derive v from query if not provided
-      detail.videoId = params.v;
-    }
-    const vid = detail.videoId;
-    if (!vid) return;
-    if (!store.has(vid) && store.size >= 10) store.delete(store.keys().next().value);
-    const bucket = store.get(vid) || { tt: { byKey: new Map() } };
-
-    if (kind === 'youtubei') {
-      // Capture params token if present in body (response body not useful here)
-      // The injected observer sends request body params if available via detail.reqParams
-      const p = detail.reqParams || null;
-      if (p) bucket.yti = { params: p };
-      store.set(vid, bucket);
-      return;
-    }
-
-    if (kind === 'timedtext') {
-      if (!url || !body || size <= 0) return;
-      // Try to derive track key from lang/kind query params
-      const lang = params.lang || null;
-      const isAsr = params.kind === 'asr' || (params.cc && /^a\./.test(params.cc));
-      const ttKey = `${lang || ''}|${isAsr ? 'asr' : 'manual'}`;
-      bucket.tt.byKey.set(ttKey, { url, params, contentType, size, body });
-      store.set(vid, bucket);
-      return;
-    }
-  } catch {
-    // ignore
-  }
+  const caption = describeCaptionUrl(detail?.url);
+  if (!caption || !detail.body) return;
+  if (!store.has(caption.videoId) && store.size >= MAX_VIDEOS) store.delete(store.keys().next().value);
+  const tracks = store.get(caption.videoId) || new Map();
+  const entry = { url: detail.url, contentType: detail.contentType || '', body: detail.body };
+  tracks.set(caption.key, entry);
+  store.set(caption.videoId, tracks);
+  for (const waiter of waiters) waiter(caption, entry);
 };
 
-const wait = (ms) => new Promise(res => setTimeout(res, ms));
+/** WHAT: Returns captions the player already fetched for this track. WHY: Keeps a repeat request off the network. */
+export const harvestedCaption = (videoId, track) => store.get(videoId)?.get(captionKey(track?.languageCode, track?.kind)) || null;
 
-// Try to gently cause the page to fetch subtitles for the given track
-export const nudgeForTrack = async (track) => {
-  try {
-    const ytdPlayer = document.querySelector('ytd-player');
-    const player = ytdPlayer?.getPlayer?.() || ytdPlayer?.player;
-    const ccBtn = document.querySelector('.ytp-subtitles-button');
-
-    // Prefer using player API if available
-    if (player?.setOption) {
-      try {
-        player.setOption('captions', 'track', {
-          languageCode: track?.languageCode || 'en',
-          kind: track?.kind === 'asr' ? 'asr' : undefined
-        });
-        // Enable captions briefly
-        player.setOption('captions', 'enabled', true);
-      } catch {}
-    } else if (ccBtn) {
-      // Toggle CC button to trigger a timedtext fetch
-      const wasPressed = ccBtn.getAttribute('aria-pressed') === 'true';
-      ccBtn.click();
-      // restore after a short delay if we changed it
-      setTimeout(() => {
-        try {
-          const pressed = ccBtn.getAttribute('aria-pressed') === 'true';
-          if (pressed !== wasPressed) ccBtn.click();
-        } catch {}
-      }, 1200);
-    }
-  } catch {}
+/** WHAT: Resolves when the player has fetched this track. WHY: Keeps the caller bound to one video and track with a deadline. */
+export const awaitHarvestedCaption = (videoId, track, timeoutMs) => {
+  // The player may have fetched it on its own, e.g. right after an ad.
+  const existing = harvestedCaption(videoId, track);
+  if (existing) return Promise.resolve(existing);
+  const wanted = captionKey(track?.languageCode, track?.kind);
+  return new Promise((resolve) => {
+    const finish = (entry) => { clearTimeout(timer); waiters.delete(waiter); resolve(entry); };
+    const waiter = (caption, entry) => { if (caption.videoId === videoId && caption.key === wanted) finish(entry); };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    waiters.add(waiter);
+  });
 };
 
-export const awaitTemplateForTrack = async (videoId, track, timeoutMs = 2500) => {
-  const existing = store.get(videoId);
-  const tKey = keyForTrack(track);
-  const ttEntry = existing?.tt?.byKey?.get(tKey) || null;
-  if (ttEntry) return { kind: 'timedtext', data: ttEntry };
+/** WHAT: Wraps the page's fetch and XHR once to report caption responses. WHY: Keeps duplicate network wrappers out of the page. */
+export const injectObserver = () => {
+  if (window.__ytxtObserverInstalled) return;
+  window.__ytxtObserverInstalled = true;
 
-  let done = false;
-  let result = null;
-  const onEvent = (e) => {
-    try {
-      const d = e?.detail || {};
-      if (!d) return;
-      if (d.kind === 'timedtext') {
-        if (d.videoId === videoId) {
-          onHarvestEvent(d);
-          // try match on language
-          const lang = d.params?.lang || null;
-          const isAsr = d.params?.kind === 'asr' || (d.params?.cc && /^a\./.test(d.params.cc));
-          const key = `${lang || ''}|${isAsr ? 'asr' : 'manual'}`;
-          if (key === tKey && d.body && d.body.length > 0) {
-            result = { kind: 'timedtext', data: d };
-            done = true;
-          }
-        }
-      }
-    } catch {}
+  const forward = async (url, readBody, contentType) => {
+    if (!describeCaptionUrl(url)) return;
+    const body = await readBody();
+    if (body) window.dispatchEvent(new CustomEvent('ytxt:transcript-template', { detail: { url, body, contentType } }));
+  };
+  const warn = (error) => console.warn('[YouTube Transcript Reader] caption capture failed', error);
+
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = function(input, init) {
+    const pending = originalFetch(input, init);
+    const url = input instanceof Request ? input.url : String(input || '');
+    pending.then((res) => forward(url, () => res.clone().text(), res.headers.get('content-type') || '').catch(warn), () => {});
+    return pending;
   };
 
-  window.addEventListener('ytxt:transcript-template', onEvent);
-  try {
-    // Trigger page to fetch captions for this track
-    nudgeForTrack(track);
-    const start = Date.now();
-    while (!done && Date.now() - start < timeoutMs) {
-      await wait(120);
-    }
-  } finally {
-    window.removeEventListener('ytxt:transcript-template', onEvent);
-  }
-  return result;
+  const xhrOpen = XMLHttpRequest.prototype.open;
+  const xhrSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    this.__ytxtUrl = String(url || '');
+    return xhrOpen.call(this, method, url, ...rest);
+  };
+  XMLHttpRequest.prototype.send = function(body) {
+    this.addEventListener('load', () => {
+      // responseText throws for json/arraybuffer responses, so check the type first.
+      const text = this.responseType === '' || this.responseType === 'text' ? this.responseText : '';
+      forward(this.__ytxtUrl, async () => text, this.getResponseHeader('content-type') || '').catch(warn);
+    });
+    return xhrSend.call(this, body);
+  };
 };
-
-/** WHAT: Tracks successful YouTube caption responses once. WHY: Keeps duplicate network wrappers out of the page. */
-export const injectObserver = () => {
-  try {
-    if (window.__ytxtObserverInstalled) return;
-    window.__ytxtObserverInstalled = true;
-
-    const toURL = (u) => { try { return new URL(u, location.origin); } catch { return null; } };
-    const post = (d) => { try { window.dispatchEvent(new CustomEvent('ytxt:transcript-template', { detail: d })); } catch {} };
-
-    const harvest = async (reqUrl, res, reqBody) => {
-      try {
-        const u = toURL(reqUrl instanceof Request ? reqUrl.url : String(reqUrl || '')); if (!u || u.origin !== location.origin) return;
-        const path = u.pathname || '';
-        const isTT = path.includes('/api/timedtext');
-        const isYTI = path.includes('/youtubei/') && path.includes('/get_transcript');
-        if (!isTT && !isYTI) return;
-        const clone = (res && res.clone) ? res.clone() : res;
-        if (!clone || !clone.text) return;
-        const text = await clone.text();
-        if (!text || text.length === 0) return;
-        const ct = (res && res.headers && res.headers.get && res.headers.get('content-type')) || '';
-        const params = {}; if (u && u.searchParams) { u.searchParams.forEach((v, k) => { params[k] = v }); }
-        const vid = params.v || null;
-        if (isTT) {
-          post({ kind: 'timedtext', url: u.toString(), params, videoId: vid, contentType: ct, size: text.length, body: text });
-        } else if (isYTI) {
-          let reqParams = null;
-          if (reqBody && typeof reqBody === 'string') {
-            try { const j = JSON.parse(reqBody); if (j && j.params) reqParams = j.params; } catch {}
-          }
-          post({ kind: 'youtubei', url: u.toString(), videoId: vid, contentType: ct, size: text.length, body: text, reqParams });
-        }
-      } catch {}
-    };
-
-    // Intercept fetch
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = function(input, init) {
-      let body = init && init.body ? init.body : null;
-      if (body && typeof body !== 'string') {
-        try { body = JSON.stringify(body); } catch {}
-      }
-      const p = originalFetch(input, init);
-      p.then(res => harvest(input, res, body), () => {});
-      return p;
-    };
-
-    // Intercept XMLHttpRequest
-    const xhrOpen = XMLHttpRequest.prototype.open;
-    const xhrSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.open = function(m, u, ...r) {
-      this.__ytxt = { m, u };
-      return xhrOpen.call(this, m, u, ...r);
-    };
-    XMLHttpRequest.prototype.send = function(b) {
-      const that = this;
-      this.addEventListener('load', function() {
-        try {
-          const info = that.__ytxt || {};
-          const url = info.u || '';
-          const fakeRes = {
-            clone: () => ({ text: async () => (typeof that.responseText === 'string' ? that.responseText : '') }),
-            headers: { get: (k) => that.getResponseHeader(k) }
-          };
-          const reqBody = (typeof b === 'string') ? b : null;
-          harvest(url, fakeRes, reqBody);
-        } catch {}
-      });
-      return xhrSend.call(this, b);
-    };
-  } catch {}
-};
-

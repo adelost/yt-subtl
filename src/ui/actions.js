@@ -3,6 +3,7 @@
  */
 
 import { fetchTranscript } from '../core/engine.js';
+import { onStatus } from '../shared/status-bus.js';
 import { copyToClipboard, downloadText } from '../lib/helpers.js';
 import {
   tracks,
@@ -49,6 +50,7 @@ export async function doFetch({ load = fetchTranscript } = {}) {
       trackSignature(currentTrack) === requestedTrack;
   };
 
+  const stopStatus = onStatus((message) => { if (isCurrentRequest()) setStatus(message); });
   try {
     const result = await load(track, $videoId, true);
     if (!isCurrentRequest()) return false;
@@ -62,6 +64,7 @@ export async function doFetch({ load = fetchTranscript } = {}) {
     setStatus(err.message || 'Failed to load', 'error');
     return false;
   } finally {
+    stopStatus();
     if (isCurrentRequest()) loading.set(false);
   }
 }

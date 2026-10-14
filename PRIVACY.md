@@ -1,6 +1,6 @@
 # Privacy Policy for YouTube Transcript Reader
 
-Last updated: October 10, 2026
+Last updated: October 14, 2026
 
 YouTube Transcript Reader is a Chrome extension that adds a transcript panel to YouTube watch pages.
 
@@ -28,7 +28,7 @@ The extension may request caption or transcript data from YouTube in the user's 
 
 Display preferences are saved in the browser's local storage for the YouTube origin. Transcript text is held in page memory unless the user explicitly copies or downloads it. YouTube's own storage, network and account policies remain separate from this extension.
 
-Version 1.3.0 uses a content script only on `www.youtube.com`. It requests no tabs, scripting, web-navigation or background-service-worker permissions. It observes caption requests made by that page locally and may activate YouTube's native transcript control to read captions.
+Version 1.3.1 uses a content script only on `www.youtube.com`. It requests no tabs, scripting, web-navigation or background-service-worker permissions. It observes caption requests made by that page locally. To load the caption track you choose, it asks the YouTube player on the page to load that track, reads the captions the player receives, and then restores your caption setting and caption language preference. For the default track it may also open YouTube's native transcript panel and close it again.
 
 ## Remote Code
 

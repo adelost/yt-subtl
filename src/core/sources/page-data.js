@@ -1,5 +1,5 @@
 import { parseYouTubeITranscript } from '../../lib/parsers.js';
-import { getCurrentVideoId } from '../../lib/youtube.js';
+import { getCurrentVideoId, getPlayerApi } from '../../lib/youtube.js';
 
 const matchesDefaultTrack = (data, player, track, videoId) => {
   if (data?.currentVideoEndpoint?.watchEndpoint?.videoId !== videoId || player?.videoDetails?.videoId !== videoId) return false;
@@ -17,9 +17,7 @@ export function readPageTranscript(data, player, track, videoId, withTS) {
 
 /** WHAT: Loads YouTube's modern transcript for the verified default track. WHY: Keeps native panel changes behind exact video and language fences. */
 export async function tryPageData(track, videoId, withTS) {
-  const node = document.querySelector('ytd-reel-video-renderer[is-active] ytd-player') || document.querySelector('ytd-player');
-  const player = node?.getPlayer?.() || node?.player;
-  const responses = [player?.getPlayerResponse?.(), window.ytInitialPlayerResponse].filter(Boolean);
+  const responses = [getPlayerApi()?.getPlayerResponse?.(), window.ytInitialPlayerResponse].filter(Boolean);
   const candidates = () => [document.querySelector('ytd-watch-flexy')?.data, window.ytInitialData];
   if (!candidates().some(data => responses.some(response => matchesDefaultTrack(data, response, track, videoId)))) return { ok: false };
   const read = () => {
@@ -36,18 +34,26 @@ export async function tryPageData(track, videoId, withTS) {
   if (text) return { ok: true, text, via: 'page:transcript' };
   const button = document.querySelector('ytd-video-description-transcript-section-renderer button');
   if (!button) return { ok: false };
-  const nativePanel = () => [...document.querySelectorAll('ytd-engagement-panel-section-list-renderer')]
-    .find(panel => panel.getAttribute('visibility') === 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED' && panel.querySelector('transcript-segment-view-model'));
-  const alreadyOpen = !!nativePanel();
+  const alreadyOpen = !!openTranscriptPanel();
   button.click();
-  const deadline = Date.now() + 2500;
-  while (Date.now() < deadline && getCurrentVideoId() === videoId) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    text = read();
-    if (text) {
-      if (!alreadyOpen) nativePanel()?.querySelector('#visibility-button button, button[aria-label="Close"]')?.click();
-      return { ok: true, text, via: 'page:transcript' };
+  try {
+    const deadline = Date.now() + 2500;
+    while (Date.now() < deadline && getCurrentVideoId() === videoId) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      text = read();
+      if (text) return { ok: true, text, via: 'page:transcript' };
     }
+    return { ok: false };
+  } finally {
+    // Leave YouTube's own panel as the viewer had it.
+    if (!alreadyOpen) closeTranscriptPanel();
   }
-  return { ok: false };
 }
+
+const openTranscriptPanel = () => document.querySelector(
+  'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"][visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]'
+);
+
+const closeTranscriptPanel = () => openTranscriptPanel()
+  ?.querySelector('#visibility-button button, button[aria-label="Close transcript"], button[aria-label="Close"]')
+  ?.click();

@@ -3,7 +3,7 @@
  * Minimal orchestration, UI logic in ui/
  */
 
-import { extractCaptionTracks, getCurrentVideoId } from './lib/youtube.js';
+import { extractCaptionTracks, getCurrentVideoId, getPlayerElement, isAdShowing } from './lib/youtube.js';
 import { injectObserver, onHarvestEvent } from './lib/harvest.js';
 import { initPanel, removePanel, updateTracks, resetPlacement } from './ui/index.js';
 
@@ -11,12 +11,6 @@ import { initPanel, removePanel, updateTracks, resetPlacement } from './ui/index
 if (location.hostname !== 'www.youtube.com') {
   throw new Error('Not YouTube');
 }
-
-// Check if ad is playing
-const isAdPlaying = () => {
-  const player = document.querySelector('.html5-video-player');
-  return player?.classList.contains('ad-showing') || false;
-};
 
 // Update captions from YouTube data
 const updateCaptions = () => {
@@ -49,7 +43,7 @@ const onNavigate = () => {
 // Watch for ads
 let wasAdPlaying = false;
 const adObserver = new MutationObserver(() => {
-  const adNow = isAdPlaying();
+  const adNow = isAdShowing();
   if (wasAdPlaying && !adNow) {
     setTimeout(updateCaptions, 1500);
   }
@@ -58,19 +52,17 @@ const adObserver = new MutationObserver(() => {
 
 const startAdObserver = () => {
   adObserver.disconnect();
-  const player = document.querySelector('.html5-video-player');
+  const player = getPlayerElement();
   if (player) {
     adObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
-    wasAdPlaying = isAdPlaying();
+    wasAdPlaying = isAdShowing();
   }
 };
 
 // Wait for DOM to be ready before initializing
 const init = () => {
   injectObserver();
-  window.addEventListener('ytxt:transcript-template', (e) => {
-    try { onHarvestEvent(e.detail); } catch {}
-  });
+  window.addEventListener('ytxt:transcript-template', (e) => onHarvestEvent(e.detail));
   window.addEventListener('yt-navigate-finish', onNavigate);
   window.addEventListener('yt-page-data-updated', updateCaptions);
 
