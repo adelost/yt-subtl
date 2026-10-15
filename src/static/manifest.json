@@ -1,7 +1,7 @@
 {
-  "name": "YouTube Transcript Reader",
+  "name": "Copy Transcript for YouTube",
   "description": "Copy a YouTube video's full transcript in one click. Search it, download it, and click timestamps to jump.",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "manifest_version": 3,
   "content_scripts": [
     {

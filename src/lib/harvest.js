@@ -58,7 +58,7 @@ export const injectObserver = () => {
     const body = await readBody();
     if (body) window.dispatchEvent(new CustomEvent('ytxt:transcript-template', { detail: { url, body, contentType } }));
   };
-  const warn = (error) => console.warn('[YouTube Transcript Reader] caption capture failed', error);
+  const warn = (error) => console.warn('[Copy Transcript for YouTube] caption capture failed', error);
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = function(input, init) {

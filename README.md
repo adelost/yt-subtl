@@ -1,8 +1,8 @@
-# YouTube Transcript Reader
+# Copy Transcript for YouTube
 
-A Chrome extension that adds a clean transcript panel to YouTube watch pages.
+A Chrome extension that adds a clean transcript panel to YouTube watch pages. It was called YouTube Transcript Reader before version 1.3.3.
 
-Read, search, copy, download, and jump by timestamp without opening YouTube's built-in transcript menu.
+Copy the whole transcript in one click, or read, search, download and jump by timestamp without opening YouTube's built-in transcript menu.
 
 ## Features
 

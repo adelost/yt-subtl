@@ -23,7 +23,7 @@ export const fetchTranscript = async (track, videoId, withTS) => {
       }
       reason ||= res?.reason || '';
     } catch (error) {
-      console.warn(`[YouTube Transcript Reader] ${step.name} failed`, error);
+      console.warn(`[Copy Transcript for YouTube] ${step.name} failed`, error);
     }
   }
   throw new Error(reason || DEFAULT_FAILURE);

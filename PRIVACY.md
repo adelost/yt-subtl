@@ -1,8 +1,8 @@
-# Privacy Policy for YouTube Transcript Reader
+# Privacy Policy for Copy Transcript for YouTube
 
 Last updated: October 15, 2026
 
-YouTube Transcript Reader is a Chrome extension that adds a transcript panel to YouTube watch pages.
+Copy Transcript for YouTube is a Chrome extension that adds a transcript panel to YouTube watch pages. It was called YouTube Transcript Reader before version 1.3.3.
 
 ## Single Purpose
 

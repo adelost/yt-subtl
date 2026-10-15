@@ -1,9 +1,9 @@
-# Chrome Web Store listing, 1.3.2
+# Chrome Web Store listing, 1.3.3
 
 This file holds the exact text for the store. The name and the short description come from `src/static/manifest.json`.
 
 ## Name
-YouTube Transcript Reader
+Copy Transcript for YouTube
 
 ## Short description
 Copy a YouTube video's full transcript in one click. Search it, download it, and click timestamps to jump.
@@ -11,7 +11,7 @@ Copy a YouTube video's full transcript in one click. Search it, download it, and
 ## Description
 Copy a YouTube video's full transcript in one click and paste it into notes, docs or any AI chat.
 
-YouTube Transcript Reader adds a clean transcript panel directly on YouTube watch pages.
+Copy Transcript for YouTube adds a clean transcript panel directly on YouTube watch pages.
 
 It lets you read subtitles without opening YouTube's built-in transcript menu, search through the text, copy useful sections, save the full transcript, and click timestamps to jump to the matching moment in the video.
 
@@ -55,7 +55,7 @@ https://github.com/adelost/yt-subtl/blob/master/PRIVACY.md
 ## Package and pictures
 - Build: `npm ci`, then `npm run package`. Package version and manifest version must agree.
 - Upload `extension.zip`, not the source repository.
-- Screenshots: `store-assets/screenshot-1-timeline.png` and `store-assets/screenshot-2-search-dark.png`, 1280x800 browser captures of version 1.3.2 on "NASA ScienceCasts: Cool Science on the International Space Station" by NASA Science (CjjNRUSX348), which YouTube lists under Creative Commons Attribution. Credit is visible in the captures as the channel name and title.
+- Screenshots: `store-assets/screenshot-1-timeline.png` and `store-assets/screenshot-2-search-dark.png`, 1280x800 browser captures of version 1.3.2 (unchanged UI in 1.3.3) on "NASA ScienceCasts: Cool Science on the International Space Station" by NASA Science (CjjNRUSX348), which YouTube lists under Creative Commons Attribution. Credit is visible in the captures as the channel name and title.
 - Promo tiles and icon: `store-assets/small-promo-440x280.png`, `store-assets/marquee-promo-1400x560.png`, `store-assets/store-icon-128.png`.
 - Verification: `docs/qa/2026-10-15/README.md`.
 

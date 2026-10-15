@@ -62,3 +62,12 @@ Remaining nits: the text view stays plain text on purpose, for selecting and cop
 
 - `npm test`: 51 tests, 49 pass, 2 skipped. New tests cover the plain track name, the word count, copy feedback, match labels and the doubled auto label. Each one failed before its change.
 - Browser smoke on the unpacked 1.3.2 ZIP, `jNQXAC9IVRw`, real Chromium under Xvfb: 26 of 26 checks pass. They include a quick copy from the collapsed bar that copies the whole transcript, the word count in the feedback, a visible toggle state, "Copy matches", seeking from the timeline, the no-match message, a narrow layout and no page errors.
+
+## 1.3.3 name and icon
+
+The extension is renamed from "YouTube Transcript Reader" to "Copy Transcript for YouTube". The new name leads with the main use, and "for YouTube" is the form YouTube's branding guidelines allow instead of starting a product name with the trademark. The promo tiles are redone with the new name and icon, and the marquee tile carries an unedited crop of the 1.3.2 panel.
+
+
+The store and the extension showed two different icons: a red speech bubble in the store and a red play-and-lines square in the extension. Both now use one flat speech bubble, `src/static/icon.svg`, rendered to 16, 48 and 128 px. The 128 px file keeps Chrome's 96 px artwork with 16 px of transparent padding. The UI is unchanged from 1.3.2.
+
+Verified on the unpacked 1.3.3 ZIP: `npm test` 49 pass and 2 skipped, the same browser smoke with 26 of 26 checks, and chrome://extensions showing "Copy Transcript for YouTube" 1.3.3 with the new icon.
