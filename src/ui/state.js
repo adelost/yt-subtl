@@ -56,10 +56,28 @@ export const matchCount = derived([search, filteredLines], ([s, f]) =>
   s ? f.length : 0
 );
 
-/** WHAT: Calculates cue and spoken-word counts. WHY: Keeps timestamp labels out of the word total. */
-export const stats = derived([transcript, lines], ([t, l]) =>
-  t ? `${l.length} lines · ${l.map(getContent).join(' ').split(/\s+/).filter(Boolean).length} words` : ''
+const countOf = (n, singular, plural) => `${n} ${n === 1 ? singular : plural}`;
+
+/** WHAT: Names the search outcome in words. WHY: Keeps a bare number or an empty list from being the only feedback. */
+export const matchLabel = derived([search, matchCount], ([s, n]) => {
+  if (!s.trim()) return '';
+  return n ? countOf(n, 'match', 'matches') : `No matches for “${s.trim()}”`;
+});
+
+/** WHAT: Calculates the spoken-word count. WHY: Keeps timestamp labels out of the total that stats and copy feedback report. */
+export const wordCount = derived(lines, (l) => l.map(getContent).join(' ').split(/\s+/).filter(Boolean).length);
+
+/** WHAT: Calculates cue and word counts for the footer. WHY: Keeps both counts on the same word definition. */
+export const stats = derived([transcript, lines, wordCount], ([t, l, words]) =>
+  t ? `${countOf(l.length, 'line', 'lines')} · ${countOf(words, 'word', 'words')}` : ''
 );
+
+/** WHAT: Maps a quick-copy state to what it put on the clipboard. WHY: Keeps the main action's result visible without opening the panel. */
+export const copyFeedback = (state, words) => {
+  if (state === 'ok') return `Copied ${countOf(words, 'word', 'words')}`;
+  if (state === 'error') return 'Could not copy';
+  return '';
+};
 
 // Helpers
 export const isShortsMode = () => isShorts();
@@ -94,9 +112,11 @@ export function selectBestTrack() {
   if (idx >= 0) selectedTrack.set(idx);
 }
 
+/** WHAT: Names a caption track for people. WHY: Keeps YouTube's own "(auto-generated)" from being doubled. */
 export function trackLabel(track, i) {
-  const name = track.name?.simpleText || track.languageCode || `Track ${i + 1}`;
-  return track.kind === 'asr' ? `${name} (auto)` : name;
+  const name = trackName(track) || track.languageCode || `Track ${i + 1}`;
+  // YouTube's own name often says "(auto-generated)" already.
+  return track.kind === 'asr' && !/auto/i.test(name) ? `${name} (auto)` : name;
 }
 
 const trackName = (track) => {

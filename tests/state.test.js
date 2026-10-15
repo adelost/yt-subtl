@@ -10,6 +10,10 @@ import {
   videoId,
   resetState,
   loading,
+  wordCount,
+  copyFeedback,
+  matchLabel,
+  trackLabel,
 } from '../src/ui/state.js';
 
 const track = (overrides = {}) => ({
@@ -73,5 +77,36 @@ describe('updateTracks', () => {
     assert.strictEqual(transcript.get(), '');
     assert.strictEqual(search.get(), '');
     assert.strictEqual(status.get(), '');
+  });
+});
+
+describe('copy and search feedback', () => {
+  it('counts spoken words without the timestamps', () => {
+    transcript.set('[00:01] Hello there\n[01:02:03] General Kenobi');
+    assert.strictEqual(wordCount.get(), 4);
+  });
+
+  it('says how much the quick copy put on the clipboard', () => {
+    assert.strictEqual(copyFeedback('ok', 568), 'Copied 568 words');
+    assert.strictEqual(copyFeedback('ok', 1), 'Copied 1 word');
+    assert.strictEqual(copyFeedback('error', 568), 'Could not copy');
+    assert.strictEqual(copyFeedback('idle', 568), '');
+  });
+
+  it('labels the number of search matches in words', () => {
+    transcript.set('[00:01] atoms\n[00:02] more atoms\n[00:03] nothing');
+    search.set('atoms');
+    assert.strictEqual(matchLabel.get(), '2 matches');
+    search.set('nothing');
+    assert.strictEqual(matchLabel.get(), '1 match');
+    search.set('zzz');
+    assert.strictEqual(matchLabel.get(), 'No matches for “zzz”');
+  });
+});
+
+describe('trackLabel', () => {
+  it('marks auto-generated captions once, even when YouTube already says so', () => {
+    assert.strictEqual(trackLabel({ languageCode: 'en', kind: 'asr', name: { simpleText: 'English' } }, 0), 'English (auto)');
+    assert.strictEqual(trackLabel({ languageCode: 'en', kind: 'asr', name: { runs: [{ text: 'English (auto-generated)' }] } }, 0), 'English (auto-generated)');
   });
 });

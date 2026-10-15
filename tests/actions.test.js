@@ -1,7 +1,7 @@
 import { afterEach, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { doFetch } from '../src/ui/actions.js';
-import { updateTracks, resetState, transcript, displayTranscript, includeTimestamps, loading } from '../src/ui/state.js';
+import { updateTracks, resetState, transcript, displayTranscript, includeTimestamps, loading, status } from '../src/ui/state.js';
 
 const tracks = [{ languageCode: 'en', baseUrl: 'https://www.youtube.com/api/timedtext?lang=en' }];
 afterEach(() => { resetState(); includeTimestamps.set(true); });
@@ -29,4 +29,10 @@ it('ignores late completion and releases loading after navigation', async () => 
   assert.equal(await pending, false);
   assert.equal(transcript.get(), '');
   assert.equal(loading.get(), false);
+});
+
+it('names the loaded track in plain language instead of its language code', async () => {
+  updateTracks([{ languageCode: 'en', kind: 'asr', name: { simpleText: 'English' } }], 'first');
+  await doFetch({ load: async () => '[00:01] Hello' });
+  assert.equal(status.get(), 'English (auto)');
 });

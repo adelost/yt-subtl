@@ -19,6 +19,7 @@ import {
   setStatus,
   getTrackRevision,
   trackSignature,
+  trackLabel,
 } from './state.js';
 
 let fetchToken = 0;
@@ -56,8 +57,7 @@ export async function doFetch({ load = fetchTranscript } = {}) {
     if (!isCurrentRequest()) return false;
     if (!result?.trim()) throw new Error('No captions returned. Try another track.');
     transcript.set(result);
-    const label = track.languageCode + (track.kind === 'asr' ? ' (auto)' : '');
-    setStatus(`Loaded: ${label}`, 'ok');
+    setStatus(trackLabel(track, $selectedTrack), 'ok');
     return true;
   } catch (err) {
     if (!isCurrentRequest()) return false;
@@ -108,18 +108,6 @@ function whenLoadingSettles() {
       }
     });
   });
-}
-
-/** WHAT: Dispatches the visible transcript projection. WHY: Keeps the timestamp preference consistent with exported bytes. */
-export async function copy() {
-  const $transcript = displayTranscript.get();
-  if (!$transcript) {
-    setStatus('Nothing to copy', 'warn');
-    return;
-  }
-
-  const ok = await copyToClipboard($transcript);
-  setStatus(ok ? '✓ Copied' : 'Copy failed', ok ? 'ok' : 'error');
 }
 
 /** WHAT: Dispatches search-matching captions. WHY: Keeps filtered export bound to the displayed search and timestamp preference. */

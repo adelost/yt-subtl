@@ -14,6 +14,10 @@
   --ytxt-surface: #f2f2f2;
   --ytxt-surface-hover: #e5e5e5;
   --ytxt-accent: #065fd4;
+  --ytxt-accent-soft: rgba(6, 95, 212, 0.1);
+  --ytxt-raised: #fff;
+  --ytxt-primary-bg: #0f0f0f;
+  --ytxt-primary-text: #fff;
   --ytxt-outline: #d9d9d9;
   --ytxt-error: #b3261e;
   --ytxt-focus: #065fd4;
@@ -34,6 +38,10 @@ ytd-app[dark] .ytxt-panel {
   --ytxt-surface: #3f3f3f;
   --ytxt-surface-hover: #535353;
   --ytxt-accent: #3ea6ff;
+  --ytxt-accent-soft: rgba(62, 166, 255, 0.16);
+  --ytxt-raised: #5c5c5c;
+  --ytxt-primary-bg: #f1f1f1;
+  --ytxt-primary-text: #0f0f0f;
   --ytxt-outline: #555;
   --ytxt-error: #ff8a80;
   --ytxt-focus: #3ea6ff;
@@ -115,6 +123,9 @@ ytd-app[dark] .ytxt-panel {
 
 .ytxt-flash[data-type="ok"] { color: var(--ytxt-accent); }
 
+/* Copy feedback briefly takes the title's place, so it never truncates beside the tools. */
+.ytxt-title:has(.ytxt-flash:not(:empty)) .ytxt-title-text { display: none; }
+
 .ytxt-tools {
   display: flex;
   align-items: center;
@@ -145,13 +156,14 @@ ytd-app[dark] .ytxt-panel {
 .ytxt-icon-btn[disabled]:hover { background: transparent; color: var(--ytxt-text-dim); }
 
 .ytxt-icon-btn:focus-visible,
+.ytxt-pill-btn:focus-visible,
+.ytxt-seg-btn:focus-visible,
+.ytxt-text-btn:focus-visible,
 .ytxt-title:focus-visible,
 .ytxt-btn:focus-visible,
 .ytxt-select:focus-visible,
-.ytxt-search:focus-visible,
 .ytxt-output:focus-visible,
-.ytxt-result-line:focus-visible,
-.ytxt-chip:focus-visible,
+.ytxt-cue:focus-visible,
 .ytxt-fab:focus-visible,
 .ytxt-toggle:has(input:focus-visible) {
   outline: 2px solid var(--ytxt-focus);
@@ -161,9 +173,45 @@ ytd-app[dark] .ytxt-panel {
 .ytxt-chevron svg { transition: transform 0.2s ease; }
 .ytxt-panel:not([data-collapsed]) .ytxt-chevron svg { transform: rotate(180deg); }
 
-/* Toggles (timestamps / autoload) rendered as icon buttons with active state */
+/* Toggles (timestamps / autoload) rendered as icon buttons; "on" must be visible. */
 .ytxt-toggle { position: relative; }
 .ytxt-toggle input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; }
+.ytxt-toggle:has(input:checked) { color: var(--ytxt-accent); background: var(--ytxt-accent-soft); }
+.ytxt-toggle:has(input:checked):hover { color: var(--ytxt-accent); }
+
+/* === Quick copy: the main action, so it carries a label === */
+.ytxt-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin-left: 4px;
+  padding: 0 14px 0 10px;
+  border: none;
+  border-radius: 16px;
+  background: var(--ytxt-surface);
+  color: var(--ytxt-text);
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ytxt-pill-btn:hover { background: var(--ytxt-surface-hover); }
+.ytxt-pill-btn[data-active] { color: var(--ytxt-accent); }
+.ytxt-pill-btn[disabled] { opacity: 0.4; cursor: default; }
+.ytxt-pill-btn .ytxt-spinner { width: 12px; height: 12px; margin: 2px; }
+
+/* Collapsed ghost bar: an outlined pill keeps the copy action findable at low weight. */
+.ytxt-panel[data-collapsed] .ytxt-pill-btn {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ytxt-outline);
+  color: var(--ytxt-text-dim);
+}
+.ytxt-panel[data-collapsed] .ytxt-drawer:hover .ytxt-pill-btn { color: var(--ytxt-text); }
+.ytxt-panel[data-collapsed] .ytxt-pill-btn:hover { background: var(--ytxt-surface-hover); }
+.ytxt-panel[data-collapsed] .ytxt-pill-btn[data-active] { color: var(--ytxt-accent); }
 
 /* === Body === */
 .ytxt-body { padding: 0 12px 12px; }
@@ -218,6 +266,11 @@ ytd-app[dark] .ytxt-panel {
 .ytxt-btn:hover { background: var(--ytxt-surface-hover); }
 .ytxt-btn[disabled] { opacity: 0.5; cursor: default; }
 
+/* Until a transcript is loaded, fetching is the next step. */
+.ytxt-btn[data-primary] { background: var(--ytxt-primary-bg); color: var(--ytxt-primary-text); }
+.ytxt-btn[data-primary]:hover { background: var(--ytxt-primary-bg); opacity: 0.85; }
+.ytxt-btn[data-primary] .ytxt-spinner { border-color: var(--ytxt-primary-text); border-top-color: transparent; }
+
 .ytxt-spinner {
   width: 14px;
   height: 14px;
@@ -250,7 +303,7 @@ ytd-app[dark] .ytxt-panel {
   opacity: 1;
 }
 
-/* Search results + chips share the scroll area look */
+/* Search results and the timeline share one caption row. */
 .ytxt-results,
 .ytxt-chips {
   max-height: 45vh;
@@ -260,11 +313,11 @@ ytd-app[dark] .ytxt-panel {
   scroll-padding-top: 6px;
 }
 
-.ytxt-result-line,
-.ytxt-chip {
+.ytxt-cue {
   display: flex;
   align-items: baseline;
   gap: 10px;
+  width: 100%;
   padding: 6px 8px;
   border: none;
   border-radius: 8px;
@@ -278,33 +331,63 @@ ytd-app[dark] .ytxt-panel {
   appearance: none;
 }
 
-.ytxt-result-line:hover,
-.ytxt-chip:hover { background: var(--ytxt-surface-hover); }
+.ytxt-cue:hover { background: var(--ytxt-surface-hover); }
+.ytxt-cue[data-active] { background: var(--ytxt-surface); }
 
-.ytxt-chip .time {
+/* Timestamps look like the jump targets they are. */
+.ytxt-time {
+  flex-shrink: 0;
+  min-width: 46px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--ytxt-accent-soft);
   color: var(--ytxt-accent);
   font-size: 1.2rem;
   font-weight: 500;
-  flex-shrink: 0;
-  min-width: 44px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
-.ytxt-chip .text { flex: 1; }
+.ytxt-time:empty { visibility: hidden; }
+.ytxt-cue:hover .ytxt-time,
+.ytxt-cue[data-active] .ytxt-time { background: var(--ytxt-accent); color: var(--ytxt-panel-bg); }
 
-.ytxt-chip[data-active] {
-  background: var(--ytxt-surface);
+.ytxt-cue-text { flex: 1; min-width: 0; }
+
+.ytxt-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding-left: 8px;
+  font-size: 1.2rem;
+  color: var(--ytxt-text-dim);
 }
+
+.ytxt-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ytxt-accent);
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ytxt-text-btn:hover { background: var(--ytxt-accent-soft); }
 
 @media (max-width: 520px) {
   .ytxt-controls { flex-wrap: wrap; }
   .ytxt-select { flex-basis: 100%; }
   .ytxt-controls .ytxt-btn { width: 100%; }
-}
-
-.ytxt-no-results {
-  padding: 12px 8px;
-  color: var(--ytxt-text-dim);
-  font-size: 1.3rem;
 }
 
 mark.ytxt-highlight {
@@ -335,6 +418,9 @@ mark.ytxt-highlight {
 
 .ytxt-search-wrapper svg { color: var(--ytxt-text-dim); flex-shrink: 0; }
 
+/* The ring follows the rounded field instead of a square inside it. */
+.ytxt-search-wrapper:focus-within { box-shadow: inset 0 0 0 1.5px var(--ytxt-focus); }
+
 .ytxt-search {
   flex: 1;
   min-width: 0;
@@ -349,16 +435,36 @@ mark.ytxt-highlight {
 .ytxt-search::placeholder { color: var(--ytxt-text-dim); }
 .ytxt-search::-webkit-search-cancel-button { display: none; }
 
-.ytxt-search-count {
-  font-size: 1.2rem;
-  color: var(--ytxt-text-dim);
-  white-space: nowrap;
-}
-
 .ytxt-search-wrapper .ytxt-icon-btn { width: 26px; height: 26px; }
 
-.ytxt-view-switcher,
-.ytxt-actions { display: flex; align-items: center; gap: 2px; }
+.ytxt-segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 17px;
+  background: var(--ytxt-surface);
+}
+
+.ytxt-seg-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 15px;
+  background: transparent;
+  color: var(--ytxt-text-dim);
+  cursor: pointer;
+}
+
+.ytxt-seg-btn:hover { color: var(--ytxt-text); }
+.ytxt-seg-btn[data-active] {
+  background: var(--ytxt-raised);
+  color: var(--ytxt-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
 
 /* === Footer === */
 .ytxt-footer {
